@@ -91,7 +91,7 @@ const NotificationSystem = () => {
 // Function to highlight asset names in notification text
 const highlightAssets = (text: string) => {
   const assetNames = ['stocks', 'oil', 'gold', 'crypto', 'bitcoin'];
-  let parts = [text];
+  let parts: React.ReactNode[] = [text];
   
   assetNames.forEach(asset => {
     const newParts: React.ReactNode[] = [];
