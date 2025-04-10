@@ -8,7 +8,11 @@ import MarketNews from './MarketNews';
 import GameControls from './GameControls';
 import { Separator } from '@/components/ui/separator';
 
-const Dashboard = () => {
+interface DashboardProps {
+  onEndGame?: () => void;
+}
+
+const Dashboard = ({ onEndGame }: DashboardProps) => {
   return (
     <div className="bg-dashboard-background min-h-screen text-white">
       <div className="container mx-auto px-4 py-4 max-w-7xl">
@@ -23,7 +27,7 @@ const Dashboard = () => {
           </div>
           <div className="md:col-span-4 space-y-6">
             <NetWorthChart />
-            <GameControls />
+            <GameControls onEndGame={onEndGame} />
           </div>
         </div>
         <div className="mt-6 py-6">

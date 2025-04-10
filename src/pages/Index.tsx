@@ -1,8 +1,16 @@
 
-import Dashboard from '@/components/dashboard/Dashboard';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Index = () => {
-  return <Dashboard />;
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    // Redirect to the main menu
+    navigate('/');
+  }, [navigate]);
+  
+  return null;
 };
 
 export default Index;

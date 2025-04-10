@@ -4,7 +4,11 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PauseIcon, PlayIcon, StopCircle } from 'lucide-react';
 
-const GameControls = () => {
+interface GameControlsProps {
+  onEndGame?: () => void;
+}
+
+const GameControls = ({ onEndGame }: GameControlsProps) => {
   const [isPaused, setIsPaused] = React.useState(false);
 
   return (
@@ -43,6 +47,7 @@ const GameControls = () => {
             <Button 
               variant="outline" 
               className="bg-[#0A1629] border-[#1A2B45] text-dashboard-negative hover:bg-dashboard-negative hover:text-white hover:border-dashboard-negative"
+              onClick={onEndGame}
             >
               <StopCircle size={16} className="mr-2" /> End Game
             </Button>

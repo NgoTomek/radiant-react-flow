@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -5,6 +6,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import MainMenu from "./pages/MainMenu";
+import Game from "./pages/Game";
+import Results from "./pages/Results";
+import Instructions from "./pages/Instructions";
+import Settings from "./pages/Settings";
+import Achievements from "./pages/Achievements";
 
 const queryClient = new QueryClient();
 
@@ -15,7 +22,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<MainMenu />} />
+          <Route path="/game" element={<Game />} />
+          <Route path="/results" element={<Results />} />
+          <Route path="/instructions" element={<Instructions />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/achievements" element={<Achievements />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
