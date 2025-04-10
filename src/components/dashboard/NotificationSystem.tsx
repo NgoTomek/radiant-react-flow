@@ -5,13 +5,28 @@ import { X, Check, Info, AlertTriangle, TrendingUp, TrendingDown, Award, DollarS
 const NotificationSystem = () => {
   const { notifications } = useGame();
   
-  if (!notifications || notifications.length === 0) {
+  // Filter to only show important notifications
+  const importantNotifications = notifications.filter(notification => {
+    // Only show specific notification types
+    return (
+      notification.type === 'error' || 
+      notification.type === 'achievement' || 
+      notification.type === 'warning' ||
+      // For success notifications, only show trade-related ones
+      (notification.type === 'success' && 
+        (notification.message.includes('Bought') || 
+         notification.message.includes('Sold') || 
+         notification.message.includes('Closed')))
+    );
+  });
+  
+  if (!importantNotifications || importantNotifications.length === 0) {
     return null;
   }
   
   return (
     <div className="fixed bottom-4 right-4 space-y-2 max-w-xs z-20">
-      {notifications.map(notification => {
+      {importantNotifications.map(notification => {
         let bgColor = 'bg-[#132237] border border-[#1A2B45]';
         let icon = <Info className="h-5 w-5 text-dashboard-neutral" />;
         
@@ -27,15 +42,6 @@ const NotificationSystem = () => {
           case 'achievement':
             bgColor = 'bg-dashboard-accent/20 border border-dashboard-accent/30';
             icon = <Award className="h-5 w-5 text-dashboard-accent" />;
-            break;
-          case 'priceAlert':
-            if (notification.message.includes('increased') || notification.message.includes('up')) {
-              bgColor = 'bg-dashboard-positive/20 border border-dashboard-positive/30';
-              icon = <TrendingUp className="h-5 w-5 text-dashboard-positive" />;
-            } else {
-              bgColor = 'bg-dashboard-negative/20 border border-dashboard-negative/30';
-              icon = <TrendingDown className="h-5 w-5 text-dashboard-negative" />;
-            }
             break;
           case 'warning':
             bgColor = 'bg-[#FFD700]/20 border border-[#FFD700]/30';
