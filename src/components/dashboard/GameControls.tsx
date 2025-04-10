@@ -1,16 +1,28 @@
-
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PauseIcon, PlayIcon, StopCircle } from 'lucide-react';
+import { useGame } from '@/context/GameContext';
 
 interface GameControlsProps {
   onEndGame?: () => void;
+  isPaused: boolean;
+  onTogglePause: () => void;
+  round: number;
+  totalRounds: number;
 }
 
-const GameControls = ({ onEndGame }: GameControlsProps) => {
-  const [isPaused, setIsPaused] = React.useState(false);
-
+const GameControls = ({ 
+  onEndGame, 
+  isPaused, 
+  onTogglePause,
+  round,
+  totalRounds
+}: GameControlsProps) => {
+  const { marketOpportunity } = useGame();
+  
+  const progressPercentage = (round / totalRounds) * 100;
+  
   return (
     <Card className="bg-[#132237] border-none rounded-xl overflow-hidden">
       <CardContent className="p-6">
@@ -18,17 +30,25 @@ const GameControls = ({ onEndGame }: GameControlsProps) => {
           <div className="bg-[#0A1629] rounded-lg p-4">
             <h3 className="text-[#A3B1C6] text-sm mb-1">Game Progress</h3>
             <div className="flex items-center justify-between">
-              <span className="text-white font-bold">Round 1 of 10</span>
+              <span className="text-white font-bold">Round {round} of {totalRounds}</span>
               <div className="flex gap-2">
-                <div className="w-2 h-2 rounded-full bg-dashboard-accent"></div>
-                <div className="w-2 h-2 rounded-full bg-[#1A2B45]"></div>
-                <div className="w-2 h-2 rounded-full bg-[#1A2B45]"></div>
-                <div className="w-2 h-2 rounded-full bg-[#1A2B45]"></div>
-                <div className="w-2 h-2 rounded-full bg-[#1A2B45]"></div>
+                {[...Array(5)].map((_, index) => (
+                  <div 
+                    key={index} 
+                    className={`w-2 h-2 rounded-full ${
+                      index < Math.ceil((round / totalRounds) * 5) 
+                        ? 'bg-dashboard-accent' 
+                        : 'bg-[#1A2B45]'
+                    }`}
+                  ></div>
+                ))}
               </div>
             </div>
             <div className="w-full bg-[#1A2B45] h-1.5 rounded-full mt-2 overflow-hidden">
-              <div className="bg-dashboard-accent h-full rounded-full" style={{ width: '10%' }}></div>
+              <div 
+                className="bg-dashboard-accent h-full rounded-full" 
+                style={{ width: `${progressPercentage}%` }}
+              ></div>
             </div>
           </div>
 
@@ -36,7 +56,7 @@ const GameControls = ({ onEndGame }: GameControlsProps) => {
             <Button 
               variant="outline" 
               className="bg-[#0A1629] border-[#1A2B45] text-white hover:bg-[#1A2B45] hover:text-white"
-              onClick={() => setIsPaused(!isPaused)}
+              onClick={onTogglePause}
             >
               {isPaused ? (
                 <><PlayIcon size={16} className="mr-2" /> Resume</>
@@ -53,19 +73,35 @@ const GameControls = ({ onEndGame }: GameControlsProps) => {
             </Button>
           </div>
           
-          <div className="bg-dashboard-accent/10 border border-dashboard-accent/30 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <div className="p-1.5 rounded-full bg-dashboard-accent/20 mt-0.5">
-                <div className="w-3 h-3 rounded-full bg-dashboard-accent"></div>
-              </div>
-              <div>
-                <h3 className="text-white font-medium text-sm">Market volatility increasing</h3>
-                <p className="text-[#A3B1C6] text-xs mt-1">
-                  Be prepared for potential price swings in the next round!
-                </p>
+          {marketOpportunity ? (
+            <div className="bg-dashboard-accent/10 border border-dashboard-accent/30 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-dashboard-accent/20 mt-0.5">
+                  <div className="w-3 h-3 rounded-full bg-dashboard-accent"></div>
+                </div>
+                <div>
+                  <h3 className="text-white font-medium text-sm">{marketOpportunity.title}</h3>
+                  <p className="text-[#A3B1C6] text-xs mt-1">
+                    {marketOpportunity.description}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-dashboard-accent/10 border border-dashboard-accent/30 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="p-1.5 rounded-full bg-dashboard-accent/20 mt-0.5">
+                  <div className="w-3 h-3 rounded-full bg-dashboard-accent"></div>
+                </div>
+                <div>
+                  <h3 className="text-white font-medium text-sm">Market volatility increasing</h3>
+                  <p className="text-[#A3B1C6] text-xs mt-1">
+                    Be prepared for potential price swings in the next round!
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
