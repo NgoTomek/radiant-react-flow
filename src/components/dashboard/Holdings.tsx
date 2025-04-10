@@ -1,53 +1,78 @@
 
 import React from 'react';
-import { ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDown, ArrowUp, ChevronRight } from 'lucide-react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 type Holding = {
   id: number;
   name: string;
+  symbol: string;
   price: string;
   change: number;
   value: string;
+  color: string;
 };
 
 const holdingsData: Holding[] = [
   {
     id: 1,
-    name: 'BTC',
+    name: 'Bitcoin',
+    symbol: 'BTC',
     price: '$28,312',
     change: -5.1,
-    value: '$150',
+    value: '$1,940',
+    color: '#F7931A',
   },
   {
     id: 2,
-    name: 'AAPL',
+    name: 'Apple Inc.',
+    symbol: 'AAPL',
     price: '$165',
     change: 1.2,
-    value: '$45',
+    value: '$825',
+    color: '#A2AAAD',
   },
   {
     id: 3,
-    name: 'TSLA',
+    name: 'Tesla, Inc.',
+    symbol: 'TSLA',
     price: '$214',
     change: -2.3,
-    value: '$1,940',
+    value: '$428',
+    color: '#E31937',
+  },
+  {
+    id: 4,
+    name: 'Gold',
+    symbol: 'GLD',
+    price: '$1,845',
+    change: 0.8,
+    value: '$922',
+    color: '#FFD700',
   },
 ];
 
 const Holdings = () => {
   return (
-    <div className="bg-dashboard-card rounded-xl p-6 mb-4">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-white font-bold">Holdings</h2>
-        <span className="text-dashboard-text-secondary text-sm">See All</span>
-      </div>
-
-      <div className="space-y-4">
-        {holdingsData.map((holding) => (
-          <HoldingItem key={holding.id} holding={holding} />
-        ))}
-      </div>
-    </div>
+    <Card className="bg-[#132237] border-none rounded-xl overflow-hidden">
+      <CardHeader className="p-6 pb-0">
+        <div className="flex justify-between items-center">
+          <h2 className="text-white font-bold text-lg">Assets</h2>
+          <Button variant="ghost" size="sm" className="text-[#A3B1C6] text-sm hover:text-white p-0">
+            <span>See All</span>
+            <ChevronRight size={16} />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-6">
+        <div className="space-y-4">
+          {holdingsData.map((holding) => (
+            <HoldingItem key={holding.id} holding={holding} />
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 
@@ -55,14 +80,14 @@ const HoldingItem = ({ holding }: { holding: Holding }) => {
   const isNegative = holding.change < 0;
   
   return (
-    <div className="flex justify-between items-center">
+    <div className="flex justify-between items-center hover:bg-[#1A2B45] p-2 rounded-lg transition-colors duration-200">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-dashboard-background flex items-center justify-center">
-          <span className="text-white font-bold text-xs">{holding.name}</span>
+        <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${holding.color}20`, color: holding.color }}>
+          <span className="font-bold text-xs">{holding.symbol}</span>
         </div>
         <div>
           <div className="text-white font-medium">{holding.name}</div>
-          <div className="text-dashboard-text-secondary text-sm">{holding.price}</div>
+          <div className="text-[#A3B1C6] text-sm">{holding.price}</div>
         </div>
       </div>
       
