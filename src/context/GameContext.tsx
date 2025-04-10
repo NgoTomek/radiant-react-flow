@@ -137,6 +137,7 @@ interface GameContextProps {
     title?: string;
     tip?: string;
   };
+  newsHistory: NewsItem[];
   marketOpportunity: MarketOpportunity | null;
   
   // UI state
@@ -209,6 +210,7 @@ const defaultContext: GameContextProps = {
     message: "Market news will appear here...",
     impact: {}
   },
+  newsHistory: [],
   marketOpportunity: null,
   
   notifications: [],
@@ -307,6 +309,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     title: "Market Open",
     impact: {}
   });
+  
+  // News history - keep track of previous news
+  const [newsHistory, setNewsHistory] = useState<NewsItem[]>([]);
+  
+  // News timer to control frequency
+  const [newsCountdown, setNewsCountdown] = useState(10);
   
   const [showNewsPopup, setShowNewsPopup] = useState(false);
   const [newsPopup, setNewsPopup] = useState<NewsItem>({
@@ -556,6 +564,20 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       newsEvent = regularEvents[Math.floor(Math.random() * regularEvents.length)];
     }
     
+    // Store previous news in history (limit to 10 items)
+    setNewsHistory(prev => {
+      const updatedHistory = [
+        {
+          title: currentNews.title || "Market Update",
+          message: currentNews.message,
+          impact: currentNews.impact,
+          tip: currentNews.tip
+        },
+        ...prev
+      ].slice(0, 9); // Keep only last 9 items
+      return updatedHistory;
+    });
+    
     // Set current news
     setCurrentNews({
       message: newsEvent.message,
@@ -564,15 +586,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tip: newsEvent.tip
     });
     
-    // Show news popup
-    setNewsPopup(newsEvent);
-    setShowNewsPopup(true);
+    // Show news popup only for market crash or other important events
+    if (isCrash || Math.random() < 0.3) { // Show popup only 30% of the time
+      setNewsPopup(newsEvent);
+      setShowNewsPopup(true);
+    }
     
     // Update market based on news
     updateMarketPrices(newsEvent.impact);
     
     return newsEvent;
-  }, [updateMarketPrices]);
+  }, [updateMarketPrices, currentNews]);
   
   // Game loop timer
   const startGameTimer = useCallback(() => {
@@ -587,6 +611,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     gameTimerRef.current = setInterval(() => {
       if (paused) return;
       
+      // Decrement news countdown
+      setNewsCountdown(prev => {
+        const newCount = prev - 1;
+        // Generate news approximately every 10 seconds
+        if (newCount <= 0) {
+          generateNewsEvent();
+          return 10; // Reset countdown
+        }
+        return newCount;
+      });
+      
       setTimer(prev => {
         if (prev <= 1) {
           // Time's up for this round
@@ -598,7 +633,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return nextRound;
             });
             
-            // Generate news for new round
+            // Generate news for new round (always for round transition)
             generateNewsEvent();
             
             // Update market prices
@@ -618,8 +653,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return prev - 1;
       });
       
-      // Random market updates during each round (15% chance per second)
-      if (Math.random() < 0.15) {
+      // Random market updates during each round (5% chance per second - reduced frequency)
+      if (Math.random() < 0.05) {
         updateMarketPrices();
       }
       
@@ -709,6 +744,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       gold: { direction: 'up', strength: 1 },
       crypto: { direction: 'up', strength: 2 }
     });
+    
+    // Reset news and history
+    setCurrentNews({
+      message: "Welcome to Portfolio Panic! Market updates will appear here.",
+      title: "Market Open",
+      impact: {}
+    });
+    setNewsHistory([]);
+    setNewsCountdown(10);
     
     // Reset game progress
     setRound(1);
@@ -1191,6 +1235,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     assetTrends,
     priceHistory,
     currentNews,
+    newsHistory,
     marketOpportunity,
     
     // UI state
