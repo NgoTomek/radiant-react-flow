@@ -63,16 +63,29 @@ export default {
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
 				},
-				// Custom colors for portfolio dashboard
+				// Enhanced color palette for financial dashboard
 				dashboard: {
 					background: '#0A1629',
 					card: '#132237',
-					accent: '#FF6B00',
+					'card-hover': '#1A2B45',
+					accent: '#FF6B00', 
+					'accent-hover': '#FF8A33',
 					positive: '#25C685',
 					negative: '#FF5A5A',
+					neutral: '#3A7BFF',
 					text: {
 						primary: '#FFFFFF',
 						secondary: '#A3B1C6',
+						muted: '#697A94'
+					},
+					border: {
+						DEFAULT: '#1A2B45',
+						highlight: '#3A4C65'
+					},
+					chart: {
+						grid: '#1A2B45',
+						line: '#3A7BFF',
+						area: 'rgba(58, 123, 255, 0.2)'
 					}
 				}
 			},
@@ -97,11 +110,30 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'pulse-soft': {
+					'0%, 100%': { opacity: 1 },
+					'50%': { opacity: 0.8 }
+				},
+				'fade-in': {
+					'0%': { opacity: 0 },
+					'100%': { opacity: 1 }
+				},
+				'slide-up': {
+					'0%': { transform: 'translateY(10px)', opacity: 0 },
+					'100%': { transform: 'translateY(0)', opacity: 1 }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'pulse-soft': 'pulse-soft 2s ease-in-out infinite',
+				'fade-in': 'fade-in 0.3s ease-out',
+				'slide-up': 'slide-up 0.4s ease-out'
+			},
+			boxShadow: {
+				'card-hover': '0 8px 16px rgba(0, 0, 0, 0.2)',
+				'accent': '0 0 15px rgba(255, 107, 0, 0.4)'
 			}
 		}
 	},

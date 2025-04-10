@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 
 const Dashboard = () => {
   return (
-    <div className="bg-[#0A1629] min-h-screen text-white">
+    <div className="bg-dashboard-background min-h-screen text-white">
       <div className="container mx-auto px-4 py-4 max-w-7xl">
         <Header />
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-6">
