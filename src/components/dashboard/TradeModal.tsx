@@ -17,7 +17,15 @@ interface TradeModalProps {
 }
 
 const TradeModal = ({ asset, onClose }: TradeModalProps) => {
-  const { assetPrices, assetData, portfolio, handleTrade, formatCurrency, assetTrends, priceHistory } = useGame();
+  const { 
+    assetPrices, 
+    assetData, 
+    portfolio, 
+    handleTrade, 
+    formatCurrency, 
+    assetTrends, 
+    priceHistory 
+  } = useGame();
   
   const [amount, setAmount] = useState(100);
   const [action, setAction] = useState<'buy' | 'sell' | 'short' | 'cover'>('buy');
@@ -111,7 +119,7 @@ const TradeModal = ({ asset, onClose }: TradeModalProps) => {
         break;
     }
     
-    setAmount(baseValue * (newPercentage / 100));
+    setAmount(Math.floor(baseValue * (newPercentage / 100)));
   };
   
   // Toggle between absolute and percentage modes
@@ -137,22 +145,30 @@ const TradeModal = ({ asset, onClose }: TradeModalProps) => {
           break;
       }
       
-      const calculated = Math.round((amount / baseValue) * 100);
-      setPercentage(Math.max(10, Math.min(calculated, 100)));
-      updateAmountFromPercentage(calculated);
+      if (baseValue > 0) {
+        const calculated = Math.round((amount / baseValue) * 100);
+        setPercentage(Math.max(10, Math.min(calculated, 100)));
+        updateAmountFromPercentage(calculated);
+      } else {
+        setPercentage(10);
+      }
     }
   };
   
   // Handle trade submission
   const submitTrade = () => {
+    if (amount <= 0) return;
+    
     if (action === 'buy') {
-      handleTrade(assetKey, 'buy', percentageMode ? percentage / 100 : unitsToTrade);
+      handleTrade(assetKey, 'buy', unitsToTrade);
     } else if (action === 'sell') {
-      handleTrade(assetKey, 'sell', percentageMode ? percentage / 100 : unitsToTrade);
+      handleTrade(assetKey, 'sell', unitsToTrade);
     } else if (action === 'short') {
-      handleTrade(assetKey, 'short', percentageMode ? percentage / 100 : amount);
+      handleTrade(assetKey, 'short', amount);
     } else if (action === 'cover') {
-      handleTrade(assetKey, 'cover', percentageMode ? percentage / 100 : amount / shortPosition.value);
+      if (shortPosition && shortPosition.active) {
+        handleTrade(assetKey, 'cover', percentageMode ? percentage / 100 : 1);
+      }
     }
     onClose();
   };
