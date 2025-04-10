@@ -26,7 +26,10 @@ const Dashboard = ({ onEndGame }: DashboardProps) => {
     formatTime,
     showNewsPopup,
     setShowNewsPopup,
-    newsPopup
+    newsPopup,
+    showMarketAlert,
+    setShowMarketAlert,
+    marketAlert
   } = useGame();
   
   const [showEndGameConfirm, setShowEndGameConfirm] = React.useState(false);
@@ -127,6 +130,26 @@ const Dashboard = ({ onEndGame }: DashboardProps) => {
               onClick={() => setShowNewsPopup(false)}
             >
               Continue
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Market Alert Dialog */}
+      <AlertDialog open={showMarketAlert} onOpenChange={setShowMarketAlert}>
+        <AlertDialogContent className="bg-[#132237] border-[#1A2B45] text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{marketAlert.title}</AlertDialogTitle>
+            <AlertDialogDescription className="text-[#A3B1C6]">
+              {marketAlert.message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button 
+              className="bg-dashboard-accent hover:bg-dashboard-accent-hover text-white w-full"
+              onClick={() => setShowMarketAlert(false)}
+            >
+              Acknowledge
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
