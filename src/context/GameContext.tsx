@@ -534,7 +534,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 1000);
   }, []);
   
-  // Update market
+  // Update market with increased volatility and more dynamic price changes
   const updateMarket = useCallback((newsImpact?: any) => {
     // This would use the actual updateMarketPrices function in a real implementation
     // For now, we'll just simulate price changes
@@ -543,32 +543,81 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatedHistory = { ...priceHistory };
     const updatedTrends = { ...assetTrends };
     
-    // Update each asset price
+    // Update each asset price with higher volatility
     Object.keys(updatedPrices).forEach(assetKey => {
       const asset = assetKey as AssetType;
       const currentTrend = updatedTrends[asset];
-      const volatility = asset === 'crypto' ? 0.15 : 0.08; // Higher volatility for crypto
+      
+      // Increased volatility - much higher than before
+      let volatility: number;
+      switch (asset) {
+        case 'crypto':
+          volatility = 0.25; // Extremely volatile
+          break;
+        case 'oil':
+          volatility = 0.18; // Very volatile
+          break;
+        case 'stocks':
+          volatility = 0.15; // Moderately volatile
+          break;
+        case 'gold':
+          volatility = 0.12; // Somewhat stable but still moves
+          break;
+        default:
+          volatility = 0.15;
+      }
+      
+      // Apply difficulty modifier to volatility
+      if (difficulty === 'easy') {
+        volatility *= 0.7; // Lower volatility for easy mode
+      } else if (difficulty === 'hard') {
+        volatility *= 1.5; // Higher volatility for hard mode
+      }
       
       // Calculate price change based on trend and randomness
       const trendFactor = currentTrend.direction === 'up' ? 1 : -1;
       const trendStrength = currentTrend.strength;
-      const randomFactor = Math.random() * 2 - 1; // -1 to 1
+      
+      // More extreme randomness for more exciting price movements
+      const randomFactor = Math.random() * 2.5 - 1.25; // -1.25 to 1.25
+      
+      // Add occasional spikes for more dramatic price movements (5% chance)
+      const spikeChance = Math.random();
+      const spikeMultiplier = spikeChance < 0.05 ? (Math.random() * 2 + 2) : 1; // 2-4x multiplier on 5% of updates
       
       // Combine trend and randomness
-      const changePercent = (trendFactor * trendStrength * 0.02 + randomFactor * volatility);
+      const changePercent = (trendFactor * trendStrength * 0.02 + randomFactor * volatility) * spikeMultiplier;
       
       // Apply news impact if present
       const impactMultiplier = newsImpact && newsImpact[asset] ? newsImpact[asset] - 1 : 0;
       const totalChange = changePercent + impactMultiplier;
       
-      // Update price
-      updatedPrices[asset] = Math.max(1, Math.round(updatedPrices[asset] * (1 + totalChange)));
+      // Update price with a minimum floor to prevent negative or too-low prices
+      let minPrice: number;
+      switch (asset) {
+        case 'crypto':
+          minPrice = 1000;
+          break;
+        case 'gold':
+          minPrice = 500;
+          break;
+        case 'oil':
+          minPrice = 10;
+          break;
+        case 'stocks':
+          minPrice = 50;
+          break;
+        default:
+          minPrice = 1;
+      }
+      
+      updatedPrices[asset] = Math.max(minPrice, Math.round(updatedPrices[asset] * (1 + totalChange)));
       
       // Update history
       updatedHistory[asset] = [...(updatedHistory[asset] || []), updatedPrices[asset]];
       
-      // Occasionally change trend (10% chance)
-      if (Math.random() < 0.1) {
+      // Change trend more frequently (15% chance instead of 10%)
+      if (Math.random() < 0.15) {
         updatedTrends[asset] = {
           direction: Math.random() > 0.5 ? 'up' : 'down',
           strength: (Math.floor(Math.random() * 3) + 1) as 1 | 2 | 3
@@ -581,51 +630,183 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setPriceHistory(updatedHistory);
     setAssetTrends(updatedTrends);
     
-    // Random chance to generate market opportunity (5%)
-    if (Math.random() < 0.05 && !marketOpportunity) {
-      // In a real implementation, we would use generateMarketOpportunity
-      // For now, we'll create a simple opportunity
-      setMarketOpportunity({
-        type: 'double',
-        title: 'Double or nothing!',
-        description: 'Take a chance for big gains, but beware of potential losses...',
-        actionText: 'DOUBLE OR NOTHING',
-        asset: 'crypto',
-        risk: 'high'
-      });
+    // Increased chance to generate market opportunity (10% instead of 5%)
+    if (Math.random() < 0.1 && !marketOpportunity) {
+      generateMarketOpportunity();
     }
     
     // Check achievements
     checkAchievements();
-  }, [assetPrices, priceHistory, assetTrends, marketOpportunity]);
+  }, [assetPrices, priceHistory, assetTrends, marketOpportunity, difficulty]);
   
-  // Generate news
-  const generateNews = useCallback(() => {
-    // In a real implementation, we would use generateNewsEvent
-    // For now, we'll create a simple news event
+  // Generate market opportunity with more varied options
+  const generateMarketOpportunity = useCallback(() => {
+    const opportunityTypes = [
+      {
+        type: 'double',
+        title: 'Double or Nothing!',
+        description: 'Take a chance for big gains, but beware of potential losses...',
+        actionText: 'DOUBLE OR NOTHING',
+        asset: 'crypto' as AssetType,
+        risk: 'high' as const
+      },
+      {
+        type: 'insider',
+        title: 'Insider Tip',
+        description: 'You\'ve heard a reliable tip about an upcoming price movement.',
+        actionText: 'ACT ON TIP',
+        asset: 'stocks' as AssetType,
+        risk: 'medium' as const
+      },
+      {
+        type: 'hedge',
+        title: 'Hedging Opportunity',
+        description: 'A perfect chance to protect against market downturns.',
+        actionText: 'HEDGE NOW',
+        asset: 'gold' as AssetType,
+        risk: 'low' as const
+      },
+      {
+        type: 'leverage',
+        title: 'Leverage Play',
+        description: 'Use leverage to multiply your potential returns, but be careful!',
+        actionText: 'LEVERAGE UP',
+        asset: 'oil' as AssetType,
+        risk: 'high' as const
+      }
+    ];
     
+    // Randomly select opportunity type
+    const selectedOpportunity = opportunityTypes[Math.floor(Math.random() * opportunityTypes.length)];
+    
+    // Randomly select asset if not specified
+    if (selectedOpportunity.type !== 'double') {
+      const assets: AssetType[] = ['stocks', 'oil', 'gold', 'crypto'];
+      selectedOpportunity.asset = assets[Math.floor(Math.random() * assets.length)];
+    }
+    
+    setMarketOpportunity(selectedOpportunity);
+    
+    // Notify the user
+    addNotification(`New opportunity: ${selectedOpportunity.title}`, 'info');
+  }, [addNotification]);
+  
+  // Generate news with an expanded set of market events
+  const generateNews = useCallback(() => {
+    // Much expanded news events array with varied impacts
     const newsEvents = [
       {
         title: "TECH STOCKS RALLY!",
         message: "Technology sector shows strong growth after positive earnings reports.",
-        impact: { stocks: 1.05, oil: 1.0, gold: 0.98, crypto: 1.02 },
+        impact: { stocks: 1.08, oil: 1.01, gold: 0.98, crypto: 1.03 },
         tip: "Consider investing in tech stocks to capitalize on the momentum."
       },
       {
         title: "CRYPTO REGULATION NEWS",
         message: "New regulatory framework announced for cryptocurrencies.",
-        impact: { stocks: 1.0, oil: 1.0, gold: 1.02, crypto: 0.92 },
+        impact: { stocks: 1.0, oil: 1.0, gold: 1.04, crypto: 0.85 },
         tip: "Regulatory changes often create short-term volatility but long-term stability."
       },
       {
         title: "OIL PRICES SURGE",
         message: "Global supply constraints push oil prices higher.",
-        impact: { stocks: 0.98, oil: 1.08, gold: 1.01, crypto: 0.99 },
+        impact: { stocks: 0.97, oil: 1.12, gold: 1.02, crypto: 0.99 },
         tip: "Energy price increases can affect various sectors differently."
+      },
+      {
+        title: "MARKET CRASH!",
+        message: "Major market indices plummet as investor panic spreads!",
+        impact: { stocks: 0.75, oil: 0.82, gold: 1.15, crypto: 0.70 },
+        tip: "During market crashes, defensive assets like gold often outperform.",
+        isCrash: true
+      },
+      {
+        title: "GLOBAL INFLATION RISING",
+        message: "Central banks warn of increasing inflation across major economies.",
+        impact: { stocks: 0.96, oil: 1.04, gold: 1.09, crypto: 1.03 },
+        tip: "Gold and other hard assets are traditional inflation hedges."
+      },
+      {
+        title: "TECH BUBBLE BURSTING?",
+        message: "Analysts warn tech valuations are unsustainable as selling accelerates.",
+        impact: { stocks: 0.88, oil: 0.96, gold: 1.03, crypto: 0.90 },
+        tip: "Sector rotation can provide opportunities during tech corrections."
+      },
+      {
+        title: "CRYPTOCURRENCY ADOPTION SURGES",
+        message: "Major retailers announce acceptance of multiple cryptocurrencies.",
+        impact: { stocks: 1.02, oil: 0.99, gold: 0.97, crypto: 1.18 },
+        tip: "Increased adoption tends to drive cryptocurrency valuations higher."
+      },
+      {
+        title: "OIL PRODUCTION CUTS",
+        message: "OPEC+ announces significant production cuts effective immediately.",
+        impact: { stocks: 0.97, oil: 1.14, gold: 1.02, crypto: 0.98 },
+        tip: "Production cuts typically lead to sustained higher prices."
+      },
+      {
+        title: "GOLD RESERVE DISCOVERIES",
+        message: "Major new gold reserve discovered in South America.",
+        impact: { stocks: 1.01, oil: 0.99, gold: 0.88, crypto: 1.02 },
+        tip: "Supply increases can temporarily depress commodity prices."
+      },
+      {
+        title: "CRYPTO MINING REGULATIONS",
+        message: "New environmental regulations target crypto mining operations.",
+        impact: { stocks: 1.0, oil: 1.02, gold: 1.01, crypto: 0.86 },
+        tip: "Consider the environmental impact factors in crypto investing."
+      },
+      {
+        title: "STOCK MARKET BULL RUN",
+        message: "Major indices hit all-time highs as optimism spreads.",
+        impact: { stocks: 1.09, oil: 1.04, gold: 0.96, crypto: 1.05 },
+        tip: "Bull markets can extend longer than expected but watch for overheating."
+      },
+      {
+        title: "CENTRAL BANK RATE HIKE",
+        message: "Federal Reserve announces unexpected interest rate increase.",
+        impact: { stocks: 0.93, oil: 0.96, gold: 1.05, crypto: 0.92 },
+        tip: "Higher interest rates typically pressure growth assets but support yield-sensitive investments."
+      },
+      {
+        title: "GEOPOLITICAL TENSIONS RISING",
+        message: "Conflict escalates in key oil-producing region.",
+        impact: { stocks: 0.95, oil: 1.10, gold: 1.07, crypto: 0.98 },
+        tip: "Geopolitical instability often benefits 'safe haven' assets."
+      },
+      {
+        title: "INSTITUTIONAL CRYPTO INVESTMENT",
+        message: "Major investment banks announce Bitcoin treasury holdings.",
+        impact: { stocks: 1.02, oil: 0.99, gold: 0.96, crypto: 1.15 },
+        tip: "Institutional adoption signals longer-term cryptocurrency legitimacy."
+      },
+      {
+        title: "GLOBAL ECONOMIC GROWTH SLOWS",
+        message: "IMF revises global growth projections downward.",
+        impact: { stocks: 0.94, oil: 0.91, gold: 1.04, crypto: 0.95 },
+        tip: "Economic slowdowns often lead to more accommodative monetary policy."
       }
     ];
     
-    const selectedNews = newsEvents[Math.floor(Math.random() * newsEvents.length)];
+    // Randomly select a news event with weighted probability
+    // Market crashes should be less frequent (10% chance if random < 0.1)
+    let selectedNews;
+    const crashChance = Math.random();
+    
+    if (crashChance < 0.1) {
+      // Select a crash event
+      selectedNews = newsEvents.find(news => news.isCrash) || newsEvents[0];
+      
+      // Track market crash for stats/achievements
+      setGameStats(prev => ({
+        ...prev,
+        marketCrashesWeathered: prev.marketCrashesWeathered + 1
+      }));
+    } else {
+      // Filter out crash events for normal selection
+      const normalNews = newsEvents.filter(news => !news.isCrash);
+      selectedNews = normalNews[Math.floor(Math.random() * normalNews.length)];
+    }
     
     // Update news state
     setNewsPopup(selectedNews);
@@ -643,7 +824,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 4000);
   }, [updateMarket]);
   
-  // Handle trade
+  // Handle trade with improved calculations and feedback
   const handleTrade = useCallback((asset: AssetType, action: string, quantity: any) => {
     let updatedPortfolio = { ...portfolio };
     let updatedAssetData = { ...assetData };
@@ -683,7 +864,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAssetData.quantities[asset] = (currentQuantity || 0) + actualQuantity;
       updatedAssetData.dollarValues[asset] = (updatedAssetData.dollarValues[asset] || 0) + cost;
       
-      addNotification(`Bought ${actualQuantity.toFixed(asset === 'crypto' ? 2 : 0)} ${asset}`, 'success');
+      addNotification(`Bought ${asset === 'crypto' ? actualQuantity.toFixed(4) : actualQuantity.toFixed(2)} ${asset} for ${formatCurrency(cost)}`, 'success');
     } 
     else if (action === 'sell') {
       // Calculate quantity to sell
@@ -729,7 +910,93 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAssetData.quantities[asset] = currentQuantity - quantityToSell;
       updatedAssetData.dollarValues[asset] = (updatedAssetData.dollarValues[asset] || 0) * (1 - (quantityToSell / currentQuantity));
       
-      addNotification(`Sold ${quantityToSell.toFixed(asset === 'crypto' ? 2 : 0)} ${asset} for ${formatCurrency(saleReturn)}`, wasProfitable ? 'success' : 'info');
+      // Display more detailed notification
+      const profitLossText = wasProfitable ? 
+        `Profit: ${formatCurrency(profitLoss)}` : 
+        `Loss: ${formatCurrency(Math.abs(profitLoss))}`;
+      
+      addNotification(`Sold ${asset === 'crypto' ? quantityToSell.toFixed(4) : quantityToSell.toFixed(2)} ${asset} for ${formatCurrency(saleReturn)}. ${profitLossText}`, wasProfitable ? 'success' : 'info');
+    }
+    // New feature: Short selling
+    else if (action === 'short') {
+      // Calculate short position size
+      let positionSize;
+      
+      if (typeof quantity === 'number' && quantity <= 1) {
+        // Percentage of cash
+        positionSize = updatedPortfolio.cash * quantity;
+      } else {
+        // Specific value
+        positionSize = Math.min(quantity, updatedPortfolio.cash);
+      }
+      
+      // Check if enough cash for margin
+      if (positionSize > updatedPortfolio.cash * 0.5) { // Require 50% margin
+        addNotification('Not enough cash for margin requirement!', 'error');
+        return;
+      }
+      
+      // Update portfolio
+      updatedPortfolio.cash -= positionSize * 0.5; // 50% margin requirement
+      
+      // Record short position
+      updatedAssetData.shorts[asset] = {
+        value: positionSize,
+        price: price, // Entry price
+        active: true
+      };
+      
+      addNotification(`Opened short position on ${asset} worth ${formatCurrency(positionSize)}`, 'info');
+    }
+    // Close short position
+    else if (action === 'cover') {
+      const shortPosition = updatedAssetData.shorts[asset];
+      
+      if (!shortPosition || !shortPosition.active) {
+        addNotification('No active short position to cover!', 'error');
+        return;
+      }
+      
+      // Calculate profit/loss
+      const entryPrice = shortPosition.price;
+      const currentPrice = price;
+      const positionValue = shortPosition.value;
+      
+      const priceChange = (entryPrice - currentPrice) / entryPrice;
+      const profitLoss = positionValue * priceChange * 2; // 2x leverage on shorts
+      wasProfitable = profitLoss > 0;
+      
+      // Close position
+      updatedPortfolio.cash += positionValue * 0.5 + profitLoss; // Return margin + profit/loss
+      updatedAssetData.shorts[asset] = {
+        value: 0,
+        price: 0,
+        active: false
+      };
+      
+      // Update stats
+      if (wasProfitable) {
+        setGameStats(prev => ({
+          ...prev,
+          profitableTrades: prev.profitableTrades + 1,
+          biggestGain: Math.max(prev.biggestGain, profitLoss)
+        }));
+        
+        // Achievement for profitable short
+        unlockAchievement('shortMaster');
+      } else {
+        setGameStats(prev => ({
+          ...prev,
+          biggestLoss: Math.min(prev.biggestLoss, profitLoss)
+        }));
+      }
+      
+      // Notification with profit/loss details
+      const resultText = wasProfitable ? 
+        `Profit: ${formatCurrency(profitLoss)}` : 
+        `Loss: ${formatCurrency(Math.abs(profitLoss))}`;
+      
+      addNotification(`Closed short position on ${asset}. ${resultText}`, wasProfitable ? 'success' : 'error');
     }
     
     // Update stats
@@ -747,7 +1014,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAchievements();
   }, [portfolio, assetData, assetPrices, addNotification, formatCurrency]);
   
-  // Handle opportunity
+  // Handle opportunity with enhanced mechanics and feedback
   const handleOpportunity = useCallback((opportunity: MarketOpportunity) => {
     if (opportunity.type === 'double') {
       // Double or nothing - 50% chance to double investment, 50% chance to lose it
@@ -782,14 +1049,130 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPortfolio(prev => ({ ...prev, cash: prev.cash - cashLost }));
         addNotification(`Double Fail! Lost ${formatCurrency(cashLost)}`, 'error');
       }
-    } else {
+    } 
+    else if (opportunity.type === 'insider') {
+      // Insider tip - high probability of success (80%)
+      const asset = opportunity.asset;
+      const outcome = Math.random() < 0.8;
+      
+      if (outcome) {
+        // Success - guarantee a 30-50% gain on this position
+        const cashToSpend = portfolio.cash * 0.4;
+        const quantity = cashToSpend / assetPrices[asset];
+        
+        // Update portfolio
+        setPortfolio(prev => ({ ...prev, cash: prev.cash - cashToSpend }));
+        setAssetData(prev => ({
+          ...prev,
+          quantities: {
+            ...prev.quantities,
+            [asset]: (prev.quantities[asset] || 0) + quantity
+          },
+          dollarValues: {
+            ...prev.dollarValues,
+            [asset]: (prev.dollarValues[asset] || 0) + cashToSpend
+          }
+        }));
+        
+        // Boost this asset's price on next update
+        setTimeout(() => {
+          const boost = Math.random() * 0.2 + 0.3; // 30-50% gain
+          const impact = { [asset]: 1 + boost };
+          updateMarket(impact);
+          addNotification(`Insider tip paid off! ${asset} prices jumped ${Math.round(boost * 100)}%!`, 'success');
+        }, 5000);
+      } else {
+        // Tip was wrong - guarantee a 10-20% loss
+        const cashToSpend = portfolio.cash * 0.3;
+        const quantity = cashToSpend / assetPrices[asset];
+        
+        // Update portfolio
+        setPortfolio(prev => ({ ...prev, cash: prev.cash - cashToSpend }));
+        setAssetData(prev => ({
+          ...prev,
+          quantities: {
+            ...prev.quantities,
+            [asset]: (prev.quantities[asset] || 0) + quantity
+          },
+          dollarValues: {
+            ...prev.dollarValues,
+            [asset]: (prev.dollarValues[asset] || 0) + cashToSpend
+          }
+        }));
+        
+        // Drop this asset's price on next update
+        setTimeout(() => {
+          const drop = Math.random() * 0.1 + 0.1; // 10-20% loss
+          const impact = { [asset]: 1 - drop };
+          updateMarket(impact);
+          addNotification(`Insider tip was wrong! ${asset} prices fell ${Math.round(drop * 100)}%!`, 'error');
+        }, 5000);
+      }
+    }
+    else if (opportunity.type === 'hedge') {
+      // Auto-diversify portfolio to reduce risk
+      const assets: AssetType[] = ['stocks', 'oil', 'gold', 'crypto'];
+      const cashToSpend = portfolio.cash * 0.5;
+      const perAsset = cashToSpend / assets.length;
+      
+      // Update portfolio
+      setPortfolio(prev => ({ ...prev, cash: prev.cash - cashToSpend }));
+      
+      // Buy a balanced amount of each asset
+      let updatedAssetData = { ...assetData };
+      assets.forEach(asset => {
+        const quantity = perAsset / assetPrices[asset];
+        updatedAssetData.quantities[asset] = (updatedAssetData.quantities[asset] || 0) + quantity;
+        updatedAssetData.dollarValues[asset] = (updatedAssetData.dollarValues[asset] || 0) + perAsset;
+      });
+      
+      setAssetData(updatedAssetData);
+      addNotification(`Portfolio hedged! Purchased a balanced mix of all asset types.`, 'success');
+      
+      // Unlock diversified achievement
+      unlockAchievement('diversified');
+    }
+    else if (opportunity.type === 'leverage') {
+      // Leverage play - higher risk/reward
+      const asset = opportunity.asset;
+      const outcome = Math.random() < 0.4; // 40% chance of success
+      
+      if (outcome) {
+        // Big win - 3x return
+        const cashToSpend = portfolio.cash * 0.3;
+        const quantity = (cashToSpend * 3) / assetPrices[asset]; // 3x leverage
+        
+        // Update portfolio
+        setPortfolio(prev => ({ ...prev, cash: prev.cash - cashToSpend }));
+        setAssetData(prev => ({
+          ...prev,
+          quantities: {
+            ...prev.quantities,
+            [asset]: (prev.quantities[asset] || 0) + quantity
+          },
+          dollarValues: {
+            ...prev.dollarValues,
+            [asset]: (prev.dollarValues[asset] || 0) + cashToSpend * 3
+          }
+        }));
+        
+        addNotification(`Leverage success! Tripled your investment in ${asset}!`, 'success');
+      } else {
+        // Loss - lose entire investment
+        const cashLost = portfolio.cash * 0.3;
+        
+        setPortfolio(prev => ({ ...prev, cash: prev.cash - cashLost }));
+        addNotification(`Leverage failed! Lost ${formatCurrency(cashLost)}`, 'error');
+      }
+    }
+    else {
       // Default - buy the asset with 25% of cash
       handleTrade(opportunity.asset, 'buy', 0.25);
     }
     
     // Clear the opportunity
     setMarketOpportunity(null);
-  }, [portfolio, assetPrices, handleTrade, addNotification, formatCurrency]);
+  }, [portfolio, assetPrices, assetData, handleTrade, updateMarket, addNotification, formatCurrency, unlockAchievement]);
   
   // Handle end of round
   const handleEndOfRound = useCallback(() => {
@@ -870,7 +1253,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (gameStats.marketCrashesWeathered > 0 && returnPercentage > 0) {
       unlockAchievement('marketCrash');
     }
-  }, [assetData, assetPrices, calculatePortfolioValue, gameStats.marketCrashesWeathered]);
+    
+    if (finalValue >= 15000) {
+      unlockAchievement('wealthyInvestor');
+    }
+  }, [assetData, assetPrices, calculatePortfolioValue, gameStats.marketCrashesWeathered, unlockAchievement]);
   
   // Check achievements
   const checkAchievements = useCallback(() => {
@@ -918,7 +1305,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (hasActiveProfitableShort && !achievements.shortMaster.unlocked) {
       unlockAchievement('shortMaster');
     }
-  }, [achievements, assetData, assetPrices, calculatePortfolioValue, gameStats.profitableTrades]);
+  }, [achievements, assetData, assetPrices, calculatePortfolioValue, gameStats.profitableTrades, unlockAchievement]);
   
   // Unlock achievement
   const unlockAchievement = useCallback((id: string) => {
