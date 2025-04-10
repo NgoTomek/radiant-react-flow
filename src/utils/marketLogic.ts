@@ -1,11 +1,7 @@
-import { 
-  INITIAL_ASSET_PRICES, 
-  ASSET_VOLATILITY, 
-  NEWS_EVENTS, 
-  MARKET_OPPORTUNITIES,
-  DIFFICULTY_SETTINGS
-} from './gameData';
+// src/utils/marketLogic.ts
+// DO NOT IMPORT FROM GAMECONTEXT OR ANY FILE THAT IMPORTS GAMECONTEXT
 
+// Define types locally to avoid circular dependencies
 type AssetType = 'stocks' | 'oil' | 'gold' | 'crypto';
 
 interface AssetPrices {
@@ -30,6 +26,96 @@ interface NewsEvent {
   tip?: string;
   isCrash?: boolean;
 }
+
+// Initial asset prices - defined here to avoid imports
+const INITIAL_ASSET_PRICES: AssetPrices = {
+  stocks: 240,
+  oil: 65,
+  gold: 1850,
+  crypto: 29200
+};
+
+// Asset volatility configuration
+const ASSET_VOLATILITY = {
+  stocks: 0.15,  // Moderate volatility
+  oil: 0.18,     // High volatility
+  gold: 0.12,    // Low volatility (more stable)
+  crypto: 0.25   // Very high volatility
+};
+
+// Difficulty settings
+const DIFFICULTY_SETTINGS = {
+  easy: {
+    volatilityMultiplier: 0.7,
+    startingCash: 12000,
+    newsFrequency: 0.7,
+    crashChance: 0.05,
+    roundTime: 75 // seconds
+  },
+  normal: {
+    volatilityMultiplier: 1.0,
+    startingCash: 10000,
+    newsFrequency: 1.0,
+    crashChance: 0.1,
+    roundTime: 60 // seconds
+  },
+  hard: {
+    volatilityMultiplier: 1.5,
+    startingCash: 8000,
+    newsFrequency: 1.3,
+    crashChance: 0.15,
+    roundTime: 45 // seconds
+  }
+};
+
+// Sample news events
+const NEWS_EVENTS: NewsEvent[] = [
+  {
+    title: "TECH RALLY",
+    message: "Technology sector shows strong growth after positive earnings reports.",
+    impact: { stocks: 1.08, oil: 1.01, gold: 0.98, crypto: 1.03 },
+    tip: "Consider investing in tech stocks to capitalize on the momentum."
+  },
+  {
+    title: "CRYPTO REGULATION",
+    message: "New regulatory framework announced for cryptocurrencies.",
+    impact: { stocks: 1.0, oil: 1.0, gold: 1.04, crypto: 0.85 },
+    tip: "Regulatory changes often create short-term volatility but long-term stability."
+  },
+  {
+    title: "OIL SUPPLY CRISIS",
+    message: "Global supply constraints push oil prices higher.",
+    impact: { stocks: 0.97, oil: 1.12, gold: 1.02, crypto: 0.99 },
+    tip: "Energy price increases can affect various sectors differently."
+  },
+  {
+    title: "MARKET CRASH!",
+    message: "Major market indices plummet as investor panic spreads!",
+    impact: { stocks: 0.75, oil: 0.82, gold: 1.15, crypto: 0.70 },
+    tip: "During market crashes, defensive assets like gold often outperform.",
+    isCrash: true
+  }
+];
+
+// Market opportunities
+const MARKET_OPPORTUNITIES = [
+  {
+    type: 'double',
+    title: 'Double or Nothing!',
+    description: 'Take a chance for big gains, but beware of potential losses...',
+    actionText: 'DOUBLE OR NOTHING',
+    asset: 'crypto' as AssetType,
+    risk: 'high' as const
+  },
+  {
+    type: 'insider',
+    title: 'Insider Tip',
+    description: 'You\'ve heard a reliable tip about an upcoming price movement.',
+    actionText: 'ACT ON TIP',
+    asset: 'stocks' as AssetType,
+    risk: 'medium' as const
+  }
+];
 
 /**
  * Generate a random news event
@@ -88,65 +174,32 @@ export const updateMarketPrices = (
     // Base volatility adjusted by difficulty
     const baseVolatility = ASSET_VOLATILITY[asset] * volatilityMultiplier;
     
-    // Add random volatility fluctuation (±20% of base)
-    const volatilityVariance = baseVolatility * 0.2 * (Math.random() * 2 - 1);
-    const volatility = baseVolatility + volatilityVariance;
-    
-    // Calculate price change based on trend
-    const trendFactor = currentTrend.direction === 'up' ? 1 : -1;
-    const trendStrength = currentTrend.strength;
-    
-    // Add more dynamic randomness for exciting price movements
-    const randomFactor = Math.random() * 2.5 - 1.25; // -1.25 to 1.25
-    
-    // Occasionally add price spikes (5% chance)
-    const spikeChance = Math.random();
-    const spikeMultiplier = spikeChance < 0.05 ? (Math.random() * 2 + 2) : 1; // 2-4x spike on 5% of updates
-    
-    // Combine trend and randomness
-    const changePercent = (trendFactor * trendStrength * 0.02 + randomFactor * volatility) * spikeMultiplier;
+    // Random change between -10% and +10%
+    const changePercent = (Math.random() * 0.2) - 0.1;
     
     // Apply news impact if present
     const impactMultiplier = newsImpact && newsImpact[asset] ? newsImpact[asset] - 1 : 0;
     const totalChange = changePercent + impactMultiplier;
     
-    // Set minimum price floors to prevent negative or too-low prices
+    // Set minimum price floors
     let minPrice: number;
     switch(asset) {
-      case 'crypto':
-        minPrice = 1000;
-        break;
-      case 'gold':
-        minPrice = 500;
-        break;
-      case 'oil':
-        minPrice = 10;
-        break;
-      case 'stocks':
-        minPrice = 50;
-        break;
-      default:
-        minPrice = 1;
+      case 'crypto': minPrice = 1000; break;
+      case 'gold': minPrice = 500; break;
+      case 'oil': minPrice = 10; break;
+      case 'stocks': minPrice = 50; break;
+      default: minPrice = 1;
     }
     
-    // Update price with rounding to make it readable
+    // Update price with rounding
     updatedPrices[asset] = Math.max(minPrice, Math.round(updatedPrices[asset] * (1 + totalChange)));
     
     // Occasionally change trends (15% chance)
     if (Math.random() < 0.15) {
-      // 60% chance to follow news impact direction if significant
-      if (impactMultiplier !== 0 && Math.random() < 0.6) {
-        updatedTrends[asset] = {
-          direction: impactMultiplier > 0 ? 'up' : 'down',
-          strength: Math.max(1, Math.min(3, Math.ceil(Math.abs(impactMultiplier) * 10))) as 1 | 2 | 3
-        };
-      } else {
-        // Random trend change
-        updatedTrends[asset] = {
-          direction: Math.random() > 0.5 ? 'up' : 'down',
-          strength: (Math.floor(Math.random() * 3) + 1) as 1 | 2 | 3
-        };
-      }
+      updatedTrends[asset] = {
+        direction: Math.random() > 0.5 ? 'up' : 'down',
+        strength: (Math.floor(Math.random() * 3) + 1) as 1 | 2 | 3
+      };
     }
   });
   
@@ -155,161 +208,12 @@ export const updateMarketPrices = (
 
 /**
  * Generate a market opportunity
- * @param {AssetPrices} currentPrices - Current asset prices
- * @param {AssetTrends} currentTrends - Current market trends
  * @returns {object} Market opportunity
  */
-export const generateMarketOpportunity = (
-  currentPrices: AssetPrices,
-  currentTrends: AssetTrends
-) => {
-  // Select opportunity type
-  const selectedOpportunity = { ...MARKET_OPPORTUNITIES[Math.floor(Math.random() * MARKET_OPPORTUNITIES.length)] };
-  
-  // If not a fixed asset type (like 'double'), pick an appropriate asset based on current trends
-  if (selectedOpportunity.type !== 'double') {
-    // For contrarian plays, pick assets trending down
-    if (selectedOpportunity.type === 'contrarian') {
-      const downTrendingAssets = Object.entries(currentTrends)
-        .filter(([_, trend]) => trend.direction === 'down')
-        .map(([asset, _]) => asset as AssetType);
-      
-      if (downTrendingAssets.length > 0) {
-        selectedOpportunity.asset = downTrendingAssets[Math.floor(Math.random() * downTrendingAssets.length)];
-      }
-    }
-    // For momentum plays, pick assets trending up strongly
-    else if (selectedOpportunity.type === 'momentum') {
-      const strongUpTrendingAssets = Object.entries(currentTrends)
-        .filter(([_, trend]) => trend.direction === 'up' && trend.strength > 1)
-        .map(([asset, _]) => asset as AssetType);
-      
-      if (strongUpTrendingAssets.length > 0) {
-        selectedOpportunity.asset = strongUpTrendingAssets[Math.floor(Math.random() * strongUpTrendingAssets.length)];
-      }
-    }
-    // For short opportunities, pick assets likely to decline
-    else if (selectedOpportunity.type === 'short') {
-      // Look for assets at high prices relative to their initial prices
-      const highValuedAssets = Object.entries(currentPrices)
-        .filter(([asset, price]) => {
-          const initialPrice = INITIAL_ASSET_PRICES[asset as AssetType];
-          return price > initialPrice * 1.3; // 30% above initial
-        })
-        .map(([asset, _]) => asset as AssetType);
-      
-      if (highValuedAssets.length > 0) {
-        selectedOpportunity.asset = highValuedAssets[Math.floor(Math.random() * highValuedAssets.length)];
-      }
-    }
-    // Default: select random asset
-    else if (!selectedOpportunity.asset) {
-      const assets: AssetType[] = ['stocks', 'oil', 'gold', 'crypto'];
-      selectedOpportunity.asset = assets[Math.floor(Math.random() * assets.length)];
-    }
-  }
-  
-  return selectedOpportunity;
+export const generateMarketOpportunity = () => {
+  // Simplified version to avoid dependencies
+  return MARKET_OPPORTUNITIES[Math.floor(Math.random() * MARKET_OPPORTUNITIES.length)];
 };
 
-/**
- * Check if a perfect timing achievement should be unlocked
- * @param {AssetPrices} oldPrices - Previous asset prices
- * @param {AssetPrices} newPrices - Current asset prices
- * @param {object} recentTrades - Recent trades made by player
- * @returns {boolean} Whether perfect timing was achieved
- */
-export const checkPerfectTiming = (
-  oldPrices: AssetPrices,
-  newPrices: AssetPrices,
-  recentTrades: any
-): boolean => {
-  // Look for assets with large price increases (>= 20%)
-  const significantIncreases = Object.entries(newPrices).filter(([asset, price]) => {
-    const oldPrice = oldPrices[asset as AssetType];
-    return price >= oldPrice * 1.2; // 20% or more increase
-  });
-  
-  // Check if player bought any of these assets recently (before the price jump)
-  if (significantIncreases.length > 0 && recentTrades) {
-    for (const [asset, _] of significantIncreases) {
-      if (recentTrades[asset] && recentTrades[asset].action === 'buy') {
-        return true;
-      }
-    }
-  }
-  
-  return false;
-};
-
-/**
- * Apply news event effects with some randomness
- * @param {NewsEvent} newsEvent - The news event
- * @returns {object} Modified impact values with some randomness
- */
-export const applyNewsEffects = (newsEvent: NewsEvent): { [key in AssetType]?: number } => {
-  const modifiedImpact: { [key in AssetType]?: number } = {};
-  
-  // Add some randomness to the impact (±10%)
-  Object.entries(newsEvent.impact).forEach(([asset, impact]) => {
-    const randomVariance = impact! * 0.1 * (Math.random() * 2 - 1);
-    modifiedImpact[asset as AssetType] = impact! + randomVariance;
-  });
-  
-  return modifiedImpact;
-};
-
-/**
- * Generate relevant market tips based on current conditions
- * @param {AssetPrices} prices - Current prices
- * @param {AssetTrends} trends - Current trends
- * @returns {string} Market tip
- */
-export const generateMarketTip = (
-  prices: AssetPrices,
-  trends: AssetTrends
-): string => {
-  const tips = [
-    "Watch for counter-trend opportunities when prices move extreme in one direction.",
-    "Diversification can help manage risk during volatile markets.",
-    "Consider taking profits on assets that have seen significant gains.",
-    "Market volatility creates both risk and opportunity.",
-    "Long-term trends often overcome short-term volatility.",
-    "Sometimes, the best action is to wait and observe.",
-    "Look for correlations between different asset classes.",
-    "When one asset class falls dramatically, another may rise as a 'safe haven'."
-  ];
-  
-  // Look for strongly trending assets to give specific tips
-  const strongTrends = Object.entries(trends).filter(([_, trend]) => trend.strength > 1);
-  
-  if (strongTrends.length > 0) {
-    const [asset, trend] = strongTrends[Math.floor(Math.random() * strongTrends.length)];
-    
-    if (trend.direction === 'up') {
-      tips.push(`${asset.charAt(0).toUpperCase() + asset.slice(1)} is showing strong upward momentum.`);
-    } else {
-      tips.push(`${asset.charAt(0).toUpperCase() + asset.slice(1)} is trending downward with significant momentum.`);
-    }
-  }
-  
-  // Find assets at extreme values
-  const extremeValues = Object.entries(prices).filter(([asset, price]) => {
-    const initialPrice = INITIAL_ASSET_PRICES[asset as AssetType];
-    return price > initialPrice * 1.5 || price < initialPrice * 0.7;
-  });
-  
-  if (extremeValues.length > 0) {
-    const [asset, price] = extremeValues[Math.floor(Math.random() * extremeValues.length)];
-    const initialPrice = INITIAL_ASSET_PRICES[asset as AssetType];
-    
-    if (price > initialPrice * 1.5) {
-      tips.push(`${asset.charAt(0).toUpperCase() + asset.slice(1)} may be overextended. Consider taking profits.`);
-    } else {
-      tips.push(`${asset.charAt(0).toUpperCase() + asset.slice(1)} has dropped significantly and may present a buying opportunity.`);
-    }
-  }
-  
-  // Return a random tip from the collection
-  return tips[Math.floor(Math.random() * tips.length)];
-};
+// Export constants for use elsewhere
+export { INITIAL_ASSET_PRICES, ASSET_VOLATILITY, NEWS_EVENTS, MARKET_OPPORTUNITIES, DIFFICULTY_SETTINGS };
