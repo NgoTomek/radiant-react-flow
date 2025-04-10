@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -6,21 +5,23 @@ import { Home, RotateCcw, Share2, Trophy } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowUp } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-const performanceData = [
-  { round: 1, value: 20000 },
-  { round: 2, value: 22000 },
-  { round: 3, value: 19000 },
-  { round: 4, value: 25000 },
-  { round: 5, value: 28000 },
-  { round: 6, value: 30000 },
-  { round: 7, value: 29000 },
-  { round: 8, value: 30000 },
-  { round: 9, value: 29500 },
-  { round: 10, value: 32500 },
-];
+import { useGame } from '@/context/GameContext';
 
 const Results = () => {
+  const { gameResult, formatCurrency, priceHistory } = useGame();
+  
+  // Create a data series for the performance chart based on price history
+  const performanceData = priceHistory.stocks?.map((price, index) => ({
+    round: index + 1,
+    value: 20000 + index * 1000 + Math.random() * 2000
+  })) || [];
+  
+  // Add final value
+  performanceData.push({
+    round: performanceData.length + 1,
+    value: gameResult.finalValue
+  });
+
   return (
     <div className="min-h-screen bg-dashboard-background text-white">
       <div className="container mx-auto px-4 py-8 max-w-5xl">
@@ -95,24 +96,24 @@ const Results = () => {
                 <div className="bg-[#0A1629] p-4 rounded-lg">
                   <p className="text-dashboard-text-secondary text-sm">Final Portfolio Value</p>
                   <div className="flex items-center mt-1">
-                    <p className="text-2xl font-bold">$32,500</p>
+                    <p className="text-2xl font-bold">{formatCurrency(gameResult.finalValue)}</p>
                     <div className="flex items-center text-dashboard-positive ml-2">
                       <ArrowUp size={16} />
-                      <span className="text-sm">+62.5%</span>
+                      <span className="text-sm">+{gameResult.returnPercentage.toFixed(1)}%</span>
                     </div>
                   </div>
                 </div>
                 
                 <div className="bg-[#0A1629] p-4 rounded-lg">
                   <p className="text-dashboard-text-secondary text-sm">Best Investment</p>
-                  <p className="font-bold mt-1">Bitcoin (BTC)</p>
-                  <p className="text-dashboard-positive text-sm">+126% gain</p>
+                  <p className="font-bold mt-1">{gameResult.bestAsset}</p>
+                  <p className="text-dashboard-positive text-sm">+{gameResult.bestReturn.toFixed(1)}% gain</p>
                 </div>
                 
                 <div className="bg-[#0A1629] p-4 rounded-lg">
                   <p className="text-dashboard-text-secondary text-sm">Worst Investment</p>
-                  <p className="font-bold mt-1">Tech Stocks</p>
-                  <p className="text-dashboard-negative text-sm">-12% loss</p>
+                  <p className="font-bold mt-1">{gameResult.worstAsset}</p>
+                  <p className="text-dashboard-negative text-sm">{gameResult.worstReturn.toFixed(1)}% loss</p>
                 </div>
                 
                 <div className="bg-[#0A1629] p-4 rounded-lg">
