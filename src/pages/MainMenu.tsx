@@ -1,7 +1,6 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Play, Book, Settings, Trophy } from 'lucide-react';
+import { Play, Book, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const MainMenu = () => {
@@ -23,7 +22,7 @@ const MainMenu = () => {
             </Button>
           </Link>
           
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
             <Link to="/instructions" className="block">
               <Button 
                 variant="outline" 
@@ -31,16 +30,6 @@ const MainMenu = () => {
               >
                 <Book className="mr-2" size={16} />
                 How to Play
-              </Button>
-            </Link>
-            
-            <Link to="/settings" className="block">
-              <Button 
-                variant="outline" 
-                className="w-full bg-[#132237] border-[#1A2B45] text-white hover:bg-[#1A2B45]"
-              >
-                <Settings className="mr-2" size={16} />
-                Settings
               </Button>
             </Link>
             

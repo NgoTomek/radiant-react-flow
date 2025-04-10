@@ -108,6 +108,7 @@ interface Settings {
   tutorialComplete: boolean;
   darkMode: boolean;
   saveProgress: boolean;
+  notifications: boolean;
 }
 
 interface GameContextProps {
@@ -149,6 +150,7 @@ interface GameContextProps {
   setShowMarketAlert: (show: boolean) => void;
   marketAlert: MarketAlert;
   settings: Settings;
+  updateSettings: (newSettings: Settings) => void;
   
   // Game functions
   startGame: () => void;
@@ -232,8 +234,10 @@ const defaultContext: GameContextProps = {
     music: true,
     tutorialComplete: false,
     darkMode: true,
-    saveProgress: true
+    saveProgress: true,
+    notifications: true
   },
+  updateSettings: () => {},
   
   startGame: () => {},
   togglePause: () => {},
@@ -314,7 +318,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [newsHistory, setNewsHistory] = useState<NewsItem[]>([]);
   
   // News timer to control frequency
-  const [newsCountdown, setNewsCountdown] = useState(20);
+  const [newsCountdown, setNewsCountdown] = useState(45);
   
   const [showNewsPopup, setShowNewsPopup] = useState(false);
   const [newsPopup, setNewsPopup] = useState<NewsItem>({
@@ -340,7 +344,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     music: true,
     tutorialComplete: false,
     darkMode: true,
-    saveProgress: true
+    saveProgress: true,
+    notifications: true
   });
   
   // Game statistics
@@ -451,31 +456,33 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const asset = assetKey as AssetType;
         const currentTrend = updatedTrends[asset];
         
-        // Base volatility depends on asset type
+        // Base volatility depends on asset type - reduced for more realistic changes
         let volatility = 0;
         switch(asset) {
-          case 'stocks': volatility = 0.15; break;
-          case 'oil': volatility = 0.18; break;
-          case 'gold': volatility = 0.12; break;
-          case 'crypto': volatility = 0.25; break;
+          case 'stocks': volatility = 0.03; break; // Was 0.15
+          case 'oil': volatility = 0.04; break;    // Was 0.18
+          case 'gold': volatility = 0.02; break;   // Was 0.12
+          case 'crypto': volatility = 0.055; break; // Was 0.25
         }
         
-        // Adjust volatility based on trend strength
-        volatility *= currentTrend.strength;
+        // Adjust volatility based on trend strength but keep changes smaller
+        volatility *= (currentTrend.strength * 0.5);
         
-        // Generate random price change
-        let change = (Math.random() * volatility * 2) - volatility;
+        // Generate random price change (much smaller range)
+        let change = (Math.random() * volatility) - (volatility / 2);
         
-        // Apply trend bias (up or down)
+        // Apply trend bias (up or down) - reduced impact
         if (currentTrend.direction === 'up') {
-          change += volatility * 0.3;
+          change += volatility * 0.1; // Was 0.3
         } else {
-          change -= volatility * 0.3;
+          change -= volatility * 0.1; // Was 0.3
         }
         
-        // Apply news impact if provided
+        // Apply news impact if provided but reduce its effect
         if (newsImpact && newsImpact[asset]) {
-          change += (newsImpact[asset] - 1);
+          // Scale down the news impact for more gradual changes
+          const scaledImpact = (newsImpact[asset] - 1) * 0.2;
+          change += scaledImpact;
         }
         
         // Apply price change with minimum values
@@ -485,7 +492,29 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (asset === 'oil') minPrice = 10;
         if (asset === 'stocks') minPrice = 50;
         
-        const newPrice = Math.max(minPrice, Math.round(updatedPrices[asset] * (1 + change)));
+        // Round to appropriate precision based on asset type
+        let newPrice;
+        switch(asset) {
+          case 'stocks':
+            // Round stocks to nearest 0.05
+            newPrice = Math.max(minPrice, Math.round(updatedPrices[asset] * (1 + change) * 20) / 20);
+            break;
+          case 'oil':
+            // Round oil to nearest 0.1
+            newPrice = Math.max(minPrice, Math.round(updatedPrices[asset] * (1 + change) * 10) / 10);
+            break;
+          case 'gold':
+            // Round gold to nearest whole number
+            newPrice = Math.max(minPrice, Math.round(updatedPrices[asset] * (1 + change)));
+            break;
+          case 'crypto':
+            // Round crypto to nearest 10
+            newPrice = Math.max(minPrice, Math.round(updatedPrices[asset] * (1 + change) / 10) * 10);
+            break;
+          default:
+            newPrice = Math.max(minPrice, Math.round(updatedPrices[asset] * (1 + change)));
+        }
+        
         updatedPrices[asset] = newPrice;
         
         // Update price history
@@ -495,19 +524,19 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updatedHistory[asset] = [newPrice];
         }
         
-        // Randomly change trend (15% chance)
-        if (Math.random() < 0.15) {
+        // Randomly change trend (reduced from 15% to 5% chance for more stability)
+        if (Math.random() < 0.05) {
           updatedTrends[asset] = {
             direction: Math.random() > 0.5 ? 'up' : 'down',
             strength: (Math.floor(Math.random() * 3) + 1) as 1 | 2 | 3
           };
         }
         
-        // Only notify for very significant price changes (> 15%) to reduce notifications
+        // Only notify for very significant price changes (> 8%) to reduce notifications
         const priceChange = (newPrice - (updatedHistory[asset][updatedHistory[asset].length - 2] || newPrice)) / 
           (updatedHistory[asset][updatedHistory[asset].length - 2] || newPrice) * 100;
         
-        if (Math.abs(priceChange) >= 15) {
+        if (Math.abs(priceChange) >= 8) {
           const direction = priceChange > 0 ? 'increased' : 'decreased';
           addNotification(
             `${asset.charAt(0).toUpperCase() + asset.slice(1)} price ${direction} by ${Math.abs(priceChange).toFixed(1)}%!`,
@@ -523,8 +552,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updatedPrices;
     });
     
-    // Randomly generate market opportunity (10% chance per round)
-    if (Math.random() < 0.10 && !marketOpportunity) {
+    // Randomly generate market opportunity (5% chance per round - reduced from 10%)
+    if (Math.random() < 0.05 && !marketOpportunity) {
       const opportunities = MARKET_OPPORTUNITIES;
       const randomOpportunity = opportunities[Math.floor(Math.random() * opportunities.length)];
       setMarketOpportunity(randomOpportunity);
@@ -539,8 +568,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const generateNewsEvent = useCallback((showPopup = false) => {
     const newsEvents = NEWS_EVENTS;
     
-    // 10% chance for a market crash event
-    const isCrash = Math.random() < 0.1;
+    // Reduced to 5% chance for a market crash event (was 10%)
+    const isCrash = Math.random() < 0.05;
     
     let newsEvent;
     if (isCrash) {
@@ -553,15 +582,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         marketCrashesWeathered: prev.marketCrashesWeathered + 1
       }));
       
-      // Always show alert for market crashes
-      setMarketAlert({
-        title: "MARKET CRASH!",
-        message: "Major market downturn in progress. Consider defensive positions."
-      });
-      setShowMarketAlert(true);
+      // Never show market alert popup - removed
+      // setMarketAlert({
+      //   title: "MARKET CRASH!",
+      //   message: "Major market downturn in progress. Consider defensive positions."
+      // });
+      // setShowMarketAlert(true);
       
-      // Force popup for crashes
-      showPopup = true;
+      // Never show popups
+      showPopup = false;
     } else {
       const regularEvents = newsEvents.filter(event => !event.isCrash);
       newsEvent = regularEvents[Math.floor(Math.random() * regularEvents.length)] || newsEvents[0];
@@ -593,11 +622,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tip: newsEvent.tip
     });
     
-    // Show popup only if explicitly requested or for crashes
-    if (showPopup) {
-      setNewsPopup(newsEvent);
-      setShowNewsPopup(true);
-    }
+    // Never show popups
+    // if (showPopup) {
+    //   setNewsPopup(newsEvent);
+    //   setShowNewsPopup(true);
+    // }
     
     // Update market based on news
     updateMarketPrices(newsEvent.impact);
@@ -621,12 +650,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Decrement news countdown
       setNewsCountdown(prev => {
         const newCount = prev - 1;
-        // Generate news approximately every 20-30 seconds (reduced frequency)
+        // Generate news approximately every 60-90 seconds (greatly reduced frequency)
         if (newCount <= 0) {
-          // Rarely show popups (15% chance)
-          const showPopup = Math.random() < 0.15;
-          generateNewsEvent(showPopup);
-          return Math.floor(Math.random() * 10) + 20; // Random 20-30 seconds
+          // Never show popups
+          generateNewsEvent(false);
+          return Math.floor(Math.random() * 30) + 60; // Random 60-90 seconds instead of 45-60
         }
         return newCount;
       });
@@ -642,8 +670,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return nextRound;
             });
             
-            // Generate news for new round with popup only for round transitions
-            generateNewsEvent(true);
+            // Generate news for new round without popup
+            generateNewsEvent(false);
             
             // Update market prices
             updateMarketPrices();
@@ -662,8 +690,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return prev - 1;
       });
       
-      // Random market updates during each round (3% chance per second - greatly reduced frequency)
-      if (Math.random() < 0.03) {
+      // Random market updates during each round (1% chance per second - further reduced frequency)
+      if (Math.random() < 0.01) {
         updateMarketPrices();
       }
       
@@ -761,7 +789,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       impact: {}
     });
     setNewsHistory([]);
-    setNewsCountdown(20);
+    setNewsCountdown(90); // Increased from 45 to 90 to reduce frequency even more
     
     // Reset game progress
     setRound(1);
@@ -798,14 +826,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Welcome notification
     addNotification('Game started! Make smart investment decisions.', 'info');
     
-    // Show welcome popup (but not on game initialization to avoid the error)
+    // Set welcome popup but never show it
     setNewsPopup({
       title: 'Welcome to Portfolio Panic!',
       message: 'Make strategic investment decisions to maximize your portfolio value.',
       impact: {},
       tip: 'Watch market trends closely and diversify your portfolio to manage risk.'
     });
-    // Don't show popup automatically: setShowNewsPopup(true);
+    // Don't show popup: setShowNewsPopup(true);
     
   }, [addNotification]);
   
@@ -830,7 +858,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (newPaused) {
         addNotification('Game paused', 'info');
-      } else {
+    } else {
         addNotification('Game resumed', 'info');
       }
       
@@ -845,41 +873,93 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let tradeValue = 0;
     let profitLoss = 0;
     
-    // Convert percentage to actual quantity if needed
+    console.log(`Trade requested: ${action} ${quantity} of ${asset}`);
+    console.log(`Current cash: ${updatedPortfolio.cash}, Asset price: ${assetPrices[asset]}`);
+    
+    // For 'buy' action, ensure we're working with a number of units, not a dollar amount
     let actualQuantity = quantity;
-    if (typeof quantity === 'number' && quantity <= 1 && quantity > 0) {
-      // If quantity is between 0 and 1, treat it as a percentage
-      if (action === 'buy') {
-        actualQuantity = Math.floor((portfolio.cash * quantity) / assetPrices[asset]);
-      } else if (action === 'sell' && updatedAssetData.quantities[asset]) {
+    
+    if (action === 'buy') {
+      // If the quantity is a percentage (between 0 and 1), convert it to equivalent units based on cash
+      if (typeof quantity === 'number' && quantity <= 1 && quantity > 0) {
+        actualQuantity = Math.floor((updatedPortfolio.cash * quantity) / assetPrices[asset]);
+        console.log(`Converting percentage ${quantity} to units: ${actualQuantity}`);
+      }
+      // If the quantity is already a number of units, use it directly
+      else if (typeof quantity === 'number' && quantity > 1) {
+        actualQuantity = Math.floor(quantity);
+        console.log(`Using direct units: ${actualQuantity}`);
+      }
+      // If we're given a dollar amount or a string
+      else if (typeof quantity === 'string' || (typeof quantity === 'number' && quantity > updatedPortfolio.cash)) {
+        // Assume it's a dollar amount and convert to units
+        const dollarAmount = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
+        if (!isNaN(dollarAmount) && dollarAmount > 0) {
+          actualQuantity = Math.floor(dollarAmount / assetPrices[asset]);
+          console.log(`Converting dollar amount ${dollarAmount} to units: ${actualQuantity}`);
+        } else {
+          // Default to 1 unit if invalid input
+          actualQuantity = 1;
+          console.log(`Invalid input, defaulting to 1 unit`);
+        }
+      }
+      
+      // Ensure we have at least 1 unit
+      actualQuantity = Math.max(1, actualQuantity);
+      console.log(`Final quantity to buy: ${actualQuantity}`);
+      
+      // Calculate cost based on actual quantity of units
+      tradeValue = actualQuantity * assetPrices[asset];
+      console.log(`Total cost for purchase: ${tradeValue}`);
+      
+      // Check if enough cash
+      if (tradeValue > updatedPortfolio.cash) {
+        // Adjust quantity to maximum affordable
+        const maxAffordableUnits = Math.floor(updatedPortfolio.cash / assetPrices[asset]);
+        
+        if (maxAffordableUnits <= 0) {
+          console.log(`Cannot afford any units. Cash: ${updatedPortfolio.cash}, Price: ${assetPrices[asset]}`);
+          addNotification('Not enough cash for this purchase!', 'error');
+          return false;
+        }
+        
+        actualQuantity = maxAffordableUnits;
+        tradeValue = actualQuantity * assetPrices[asset];
+        console.log(`Adjusted purchase to ${actualQuantity} units (${tradeValue})`);
+        addNotification(`Adjusted purchase to ${actualQuantity} units based on available cash`, 'warning');
+      }
+      
+      console.log(`About to update portfolio. Old cash: ${updatedPortfolio.cash}`);
+      
+      // Update portfolio - deduct cash first
+      updatedPortfolio.cash = Math.round((updatedPortfolio.cash - tradeValue) * 100) / 100;
+      console.log(`Cash after purchase: ${updatedPortfolio.cash}`);
+      
+      // Then update asset quantities
+      updatedAssetData.quantities[asset] = (updatedAssetData.quantities[asset] || 0) + actualQuantity;
+      console.log(`New quantity of ${asset}: ${updatedAssetData.quantities[asset]}`);
+      
+      // Record dollar cost average
+      updatedAssetData.dollarValues[asset] = (updatedAssetData.dollarValues[asset] || 0) + tradeValue;
+      
+      // Explicitly set the updated state to ensure changes take effect
+      setPortfolio(updatedPortfolio);
+      setAssetData(updatedAssetData);
+      
+      addNotification(`Bought ${actualQuantity} ${asset} for ${formatCurrency(tradeValue)}`, 'success');
+      return true;
+    }
+    // Keep the rest of the switch statement for other trade types
+    else if (typeof quantity === 'number' && quantity <= 1 && quantity > 0) {
+      if (action === 'sell' && updatedAssetData.quantities[asset]) {
         actualQuantity = Math.floor(updatedAssetData.quantities[asset]! * quantity);
       } else if (action === 'cover' && updatedAssetData.shorts[asset]?.active) {
         actualQuantity = quantity * updatedAssetData.shorts[asset]!.value;
       }
     }
     
-    // Process trade based on action
+    // Process other trade actions
     switch(action) {
-      case 'buy':
-        // Calculate cost
-        tradeValue = actualQuantity * assetPrices[asset];
-        
-        // Check if enough cash
-        if (tradeValue > updatedPortfolio.cash) {
-          addNotification('Not enough cash for this purchase!', 'error');
-          return false;
-        }
-        
-        // Update portfolio
-        updatedPortfolio.cash -= tradeValue;
-        updatedAssetData.quantities[asset] = (updatedAssetData.quantities[asset] || 0) + actualQuantity;
-        
-        // Record dollar cost average
-        updatedAssetData.dollarValues[asset] = (updatedAssetData.dollarValues[asset] || 0) + tradeValue;
-        
-        addNotification(`Bought ${actualQuantity} ${asset} for ${formatCurrency(tradeValue)}`, 'success');
-        break;
-      
       case 'sell':
         // Check if enough assets
         const currentQuantity = updatedAssetData.quantities[asset] || 0;
@@ -908,6 +988,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updatedAssetData.dollarValues[asset] = remainingValue;
         }
         
+        // Explicitly set the updated state
+        setPortfolio(updatedPortfolio);
+        setAssetData(updatedAssetData);
+        
         const profitText = profitLoss >= 0 
           ? `Profit: ${formatCurrency(profitLoss)}` 
           : `Loss: ${formatCurrency(Math.abs(profitLoss))}`;
@@ -915,8 +999,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addNotification(`Sold ${actualQuantity} ${asset} for ${formatCurrency(tradeValue)}. ${profitText}`, 
           profitLoss >= 0 ? 'success' : 'warning');
         
-        break;
-      
+        return true;
+        
+      // Keep existing logic for short and cover actions
       case 'short':
         // Short selling (betting price will go down)
         // Requires margin (we'll use 50% margin)
@@ -937,9 +1022,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Deduct margin from cash
         updatedPortfolio.cash -= margin;
         
+        // Explicitly set the updated state
+        setPortfolio(updatedPortfolio);
+        setAssetData(updatedAssetData);
+        
         addNotification(`Opened short position on ${asset} for ${formatCurrency(actualQuantity)}`, 'transaction');
-        break;
-      
+        return true;
+        
       case 'cover':
         // Close a short position
         if (!updatedAssetData.shorts[asset] || !updatedAssetData.shorts[asset]?.active) {
@@ -963,82 +1052,38 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const marginReturned = positionValue * 0.5;
         updatedPortfolio.cash += marginReturned + profitLoss;
         
-        // Close position
-        if (typeof actualQuantity === 'number' && actualQuantity < 1) {
-          // Partial close
+        // Mark short as inactive or remove it
+        if (typeof actualQuantity === 'number' && actualQuantity <= 1 && actualQuantity < 1) {
+          // Partial cover, update the position
+          const remainingPortion = 1 - actualQuantity;
           updatedAssetData.shorts[asset] = {
             ...shortPosition,
-            value: shortPosition.value - positionSize
+            value: shortPosition.value * remainingPortion
           };
-          
-          if (updatedAssetData.shorts[asset]!.value <= 0) {
-            updatedAssetData.shorts[asset]!.active = false;
-          }
         } else {
-          // Full close
+          // Full cover, mark as inactive
           updatedAssetData.shorts[asset] = {
-            value: 0,
-            price: 0,
+            ...shortPosition,
             active: false
           };
         }
         
-        const resultText = profitLoss >= 0 
+        // Explicitly set the updated state
+        setPortfolio(updatedPortfolio);
+        setAssetData(updatedAssetData);
+        
+        const coverProfitText = profitLoss >= 0 
           ? `Profit: ${formatCurrency(profitLoss)}` 
           : `Loss: ${formatCurrency(Math.abs(profitLoss))}`;
         
-        addNotification(`Closed short position on ${asset}. ${resultText}`, 
+        addNotification(`Covered short position on ${asset}. ${coverProfitText}`, 
           profitLoss >= 0 ? 'success' : 'warning');
         
-        // Check short master achievement
-        if (profitLoss > 0 && !achievements.shortMaster.unlocked) {
-          const updatedAchievements = { ...achievements };
-          updatedAchievements.shortMaster.unlocked = true;
-          setAchievements(updatedAchievements);
-          addNotification('Achievement Unlocked: Short Master', 'achievement');
-        }
-        
-        break;
+        return true;
     }
     
-    // Update portfolio
-    setPortfolio(updatedPortfolio);
-    setAssetData(updatedAssetData);
-    
-    // Update game stats
-    setGameStats(prev => {
-      const updatedStats = { ...prev };
-      updatedStats.tradesExecuted += 1;
-      updatedStats.tradesPerRound = (prev.tradesPerRound + 1);
-      
-      if (profitLoss > 0) {
-        updatedStats.profitableTrades += 1;
-        
-        // First profit achievement
-        if (!achievements.firstProfit.unlocked) {
-          const updatedAchievements = { ...achievements };
-          updatedAchievements.firstProfit.unlocked = true;
-          setAchievements(updatedAchievements);
-          addNotification('Achievement Unlocked: First Profit', 'achievement');
-        }
-      }
-      
-      if (profitLoss > prev.biggestGain) {
-        updatedStats.biggestGain = profitLoss;
-      }
-      
-      if (profitLoss < 0 && Math.abs(profitLoss) > Math.abs(prev.biggestLoss)) {
-        updatedStats.biggestLoss = profitLoss;
-      }
-      
-      return updatedStats;
-    });
-    
-    // Check achievements after trade
-    checkAchievements();
-    
-    return true;
-  }, [portfolio, assetData, assetPrices, formatCurrency, addNotification, achievements, checkAchievements]);
+    return false;
+  }, [portfolio, assetData, assetPrices, formatCurrency, addNotification]);
   
   // Handle special market opportunity
   const handleOpportunity = useCallback((opportunity: MarketOpportunity) => {
@@ -1052,14 +1097,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (success) {
           // Double the investment
           setPortfolio(prev => ({
-            ...prev,
+          ...prev,
             cash: prev.cash + investmentAmount
           }));
           addNotification(`Double or Nothing: You won ${formatCurrency(investmentAmount)}!`, 'success');
-        } else {
+      } else {
           // Lose the investment
           setPortfolio(prev => ({
-            ...prev,
+          ...prev,
             cash: prev.cash - investmentAmount
           }));
           addNotification(`Double or Nothing: You lost ${formatCurrency(investmentAmount)}`, 'error');
@@ -1208,6 +1253,17 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   }, [calculatePortfolioValue, priceHistory, assetPrices, gameStats, achievements, addNotification]);
   
+  // Update settings
+  const updateSettings = useCallback((newSettings: Settings) => {
+    setSettings(newSettings);
+    
+    // Additional logic can be added here to handle specific setting changes
+    // For example, saving settings to local storage
+    if (newSettings.saveProgress) {
+      // Logic to save game progress
+    }
+  }, []);
+  
   // Clean up timers when component unmounts
   useEffect(() => {
     return () => {
@@ -1262,6 +1318,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setShowMarketAlert,
     marketAlert,
     settings,
+    updateSettings,
     
     // Game functions
     startGame,
@@ -1280,7 +1337,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     gameResult,
     achievements
   };
-
+  
   return (
     <GameContext.Provider value={contextValue}>
       {children}

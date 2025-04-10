@@ -1,8 +1,15 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PauseIcon, PlayIcon, StopCircle } from 'lucide-react';
+import { PauseIcon, PlayIcon, StopCircle, BellOff, Bell } from 'lucide-react';
 import { useGame } from '@/context/GameContext';
+import { Progress } from '@/components/ui/progress';
+import { 
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface GameControlsProps {
   onEndGame?: () => void;
@@ -19,10 +26,14 @@ const GameControls = ({
   round,
   totalRounds
 }: GameControlsProps) => {
-  const { marketOpportunity } = useGame();
+  const { marketOpportunity, settings, updateSettings } = useGame();
   
   const progressPercentage = (round / totalRounds) * 100;
   
+  const toggleNotifications = () => {
+    updateSettings({ ...settings, notifications: !settings.notifications });
+  };
+
   return (
     <Card className="bg-[#132237] border-none rounded-xl overflow-hidden">
       <CardContent className="p-6">
@@ -53,24 +64,42 @@ const GameControls = ({
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <Button 
-              variant="outline" 
-              className="bg-[#0A1629] border-[#1A2B45] text-white hover:bg-[#1A2B45] hover:text-white"
-              onClick={onTogglePause}
-            >
-              {isPaused ? (
-                <><PlayIcon size={16} className="mr-2" /> Resume</>
-              ) : (
-                <><PauseIcon size={16} className="mr-2" /> Pause</>
-              )}
-            </Button>
-            <Button 
-              variant="outline" 
-              className="bg-[#0A1629] border-[#1A2B45] text-dashboard-negative hover:bg-dashboard-negative hover:text-white hover:border-dashboard-negative"
-              onClick={onEndGame}
-            >
-              <StopCircle size={16} className="mr-2" /> End Game
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="bg-[#0A1629] border-[#1A2B45] text-white hover:bg-[#1A2B45] hover:text-white"
+                    onClick={onTogglePause}
+                  >
+                    {isPaused ? (
+                      <><PlayIcon size={16} className="mr-2" /> Resume</>
+                    ) : (
+                      <><PauseIcon size={16} className="mr-2" /> Pause</>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{isPaused ? 'Resume game' : 'Pause game'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="bg-[#0A1629] border-[#1A2B45] text-dashboard-negative hover:bg-dashboard-negative hover:text-white hover:border-dashboard-negative"
+                    onClick={onEndGame}
+                  >
+                    <StopCircle size={16} className="mr-2" /> End Game
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>End game</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
           
           {marketOpportunity ? (
@@ -102,6 +131,28 @@ const GameControls = ({
               </div>
             </div>
           )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleNotifications}
+                    className="h-8 w-8"
+                  >
+                    {settings.notifications ? 
+                      <Bell className="h-4 w-4" /> : 
+                      <BellOff className="h-4 w-4" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{settings.notifications ? 'Disable notifications' : 'Enable notifications'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
       </CardContent>
     </Card>

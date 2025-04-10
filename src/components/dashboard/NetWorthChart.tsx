@@ -4,7 +4,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useGame } from '@/context/GameContext';
 
-const timeRanges = ['1D', '1W', '1M', '3M', 'ALL'];
+// Changed time ranges to round-based ranges
+const timeRanges = ['1R', '3R', '5R', 'ALL'];
 
 const NetWorthChart = () => {
   const [activeRange, setActiveRange] = useState('ALL');
@@ -42,41 +43,59 @@ const NetWorthChart = () => {
     // Simulate investment decisions throughout history
     for (let i = 1; i < maxHistoryLength; i++) {
       // Simulate some trading activity
-      const tradeChance = 0.3; // 30% chance of trading each round
-      if (Math.random() < tradeChance) {
-        // Pick a random asset to trade
+      const tradeChance = 0.3;
+      
+      // In this simplified simulation, sometimes we buy, sometimes we sell
+      if (Math.random() < tradeChance && simulatedPortfolio.cash > 1000) {
+        // Choose an asset to invest in
         const assets = ['stocks', 'oil', 'gold', 'crypto'];
-        const assetToTrade = assets[Math.floor(Math.random() * assets.length)] as keyof typeof simulatedPortfolio;
+        const chosenAsset = assets[Math.floor(Math.random() * assets.length)] as keyof typeof simulatedPortfolio;
         
-        // Buy or sell decision
-        const isBuy = simulatedPortfolio.cash > 0 && Math.random() < 0.7; // More likely to buy
+        if (chosenAsset !== 'cash') {
+          // Invest some portion of cash
+          const investmentAmount = simulatedPortfolio.cash * (Math.random() * 0.2 + 0.1); // 10-30% of cash
+          simulatedPortfolio.cash -= investmentAmount;
+          
+          // Calculate units bought
+          const price = priceHistory[chosenAsset as keyof typeof priceHistory]?.[i] || 1;
+          const unitsBought = investmentAmount / price;
+          simulatedPortfolio[chosenAsset] += unitsBought;
+          
+          investedValue += investmentAmount;
+        }
+      }
+      // Occasionally sell assets
+      else if (Math.random() < 0.2 && investedValue > 0) {
+        // Choose an asset to sell
+        const assets = ['stocks', 'oil', 'gold', 'crypto'].filter(asset => 
+          simulatedPortfolio[asset as keyof typeof simulatedPortfolio] > 0
+        );
         
-        if (isBuy && simulatedPortfolio.cash > 0) {
-          // Buy some amount (10-50% of available cash)
-          const amountToSpend = simulatedPortfolio.cash * (0.1 + Math.random() * 0.4);
-          const price = priceHistory[assetToTrade]?.[i] || priceHistory[assetToTrade]?.[0] || 1;
+        if (assets.length > 0) {
+          const chosenAsset = assets[Math.floor(Math.random() * assets.length)] as keyof typeof simulatedPortfolio;
           
-          const quantity = amountToSpend / price;
-          simulatedPortfolio[assetToTrade] += quantity;
-          simulatedPortfolio.cash -= amountToSpend;
-        } 
-        else if (!isBuy && simulatedPortfolio[assetToTrade] > 0) {
-          // Sell some amount (10-70% of holdings)
-          const amountToSell = simulatedPortfolio[assetToTrade] * (0.1 + Math.random() * 0.6);
-          const price = priceHistory[assetToTrade]?.[i] || priceHistory[assetToTrade]?.[0] || 1;
+          // Sell some or all of the asset
+          const sellPercentage = Math.random() * 0.5 + 0.5; // 50-100%
+          const unitsSold = simulatedPortfolio[chosenAsset] * sellPercentage;
+          simulatedPortfolio[chosenAsset] -= unitsSold;
           
-          const value = amountToSell * price;
-          simulatedPortfolio[assetToTrade] -= amountToSell;
-          simulatedPortfolio.cash += value;
+          // Add proceeds to cash
+          const price = priceHistory[chosenAsset as keyof typeof priceHistory]?.[i] || 1;
+          const sellValue = unitsSold * price;
+          simulatedPortfolio.cash += sellValue;
+          
+          investedValue -= sellValue;
         }
       }
       
-      // Calculate total value after trades
-      const totalValue = simulatedPortfolio.cash +
-        simulatedPortfolio.stocks * (priceHistory.stocks?.[i] || priceHistory.stocks?.[0] || 0) +
-        simulatedPortfolio.oil * (priceHistory.oil?.[i] || priceHistory.oil?.[0] || 0) +
-        simulatedPortfolio.gold * (priceHistory.gold?.[i] || priceHistory.gold?.[0] || 0) +
-        simulatedPortfolio.crypto * (priceHistory.crypto?.[i] || priceHistory.crypto?.[0] || 0);
+      // Calculate total portfolio value at this point
+      let totalValue = simulatedPortfolio.cash;
+      Object.entries(simulatedPortfolio).forEach(([key, units]) => {
+        if (key !== 'cash') {
+          const price = priceHistory[key as keyof typeof priceHistory]?.[i] || 1;
+          totalValue += units * price;
+        }
+      });
       
       cashHistory.push(totalValue);
     }
@@ -86,43 +105,40 @@ const NetWorthChart = () => {
       cashHistory[cashHistory.length - 1] = portfolioValue;
     }
     
-    // Create chart data points
+    // Create chart data points with rounds as the x-axis labels
     return cashHistory.map((value, index) => ({
-      name: index === 0 ? 'Start' : `Round ${index}`,
+      name: index === 0 ? 'Start' : `R${index}`,
       value: Math.round(value),
-      time: `Day ${index + 1}`
+      round: index
     }));
   }, [priceHistory, portfolioValue, initialValue, round]);
 
   // Check if portfolio is up or down for highlighting
   const isPositiveReturn = returnPercentage >= 0;
   
-  // Filter data based on selected time range
+  // Filter data based on selected round range
   const filteredData = useMemo(() => {
     if (activeRange === 'ALL' || chartData.length <= 1) {
       return chartData;
     }
     
-    let dataPoints: number;
+    let roundsToShow: number;
     switch (activeRange) {
-      case '1D':
-        dataPoints = 1;
+      case '1R':
+        roundsToShow = 1;
         break;
-      case '1W':
-        dataPoints = 7;
+      case '3R':
+        roundsToShow = 3;
         break;
-      case '1M':
-        dataPoints = 30;
-        break;
-      case '3M':
-        dataPoints = 90;
+      case '5R':
+        roundsToShow = 5;
         break;
       default:
-        dataPoints = chartData.length;
+        roundsToShow = chartData.length;
     }
     
-    // Take the most recent N data points
-    return chartData.slice(-Math.min(dataPoints, chartData.length));
+    // Take the most recent N rounds of data points
+    return chartData.slice(-Math.min(roundsToShow + 1, chartData.length));
   }, [chartData, activeRange]);
 
   // Calculate min/max values for chart display with padding
@@ -135,19 +151,27 @@ const NetWorthChart = () => {
 
   return (
     <Card className="bg-[#132237] border-none rounded-xl overflow-hidden">
-      <CardHeader className="p-6 pb-0">
-        <div className="flex justify-between items-center">
-          <h2 className="text-white font-bold text-lg">Net Worth History</h2>
-          <div className="flex gap-1 bg-[#0A1629] rounded-lg p-1">
+      <CardHeader className="pb-0 pt-6 px-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xl font-bold text-white">Portfolio Value</h3>
+            <div className="flex items-center mt-1">
+              <span className="text-[#A3B1C6] text-sm mr-2">Return:</span>
+              <span className={`text-sm font-medium ${isPositiveReturn ? 'text-dashboard-positive' : 'text-dashboard-negative'}`}>
+                {isPositiveReturn ? '+' : ''}{returnPercentage.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+          <div className="bg-[#0A1629] rounded-full p-1 flex space-x-1">
             {timeRanges.map((range) => (
               <button
                 key={range}
-                onClick={() => setActiveRange(range)}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                  activeRange === range
-                    ? 'bg-dashboard-accent text-white'
+                className={`px-2 py-1 text-xs rounded-full transition-colors ${
+                  activeRange === range 
+                    ? 'bg-dashboard-accent text-white' 
                     : 'text-[#A3B1C6] hover:text-white'
                 }`}
+                onClick={() => setActiveRange(range)}
               >
                 {range}
               </button>
@@ -155,28 +179,7 @@ const NetWorthChart = () => {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-6">
-        <div className="flex justify-between items-center mb-2">
-          <div>
-            <p className="text-[#A3B1C6] text-sm">Current</p>
-            <p className="text-white text-2xl font-bold">{formatCurrency(portfolioValue)}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge 
-              className={`px-2 py-1 ${isPositiveReturn 
-                ? 'bg-dashboard-positive/20 text-dashboard-positive' 
-                : 'bg-dashboard-negative/20 text-dashboard-negative'}`}
-            >
-              {isPositiveReturn ? '+' : ''}{returnPercentage.toFixed(1)}%
-            </Badge>
-            <Badge 
-              className="px-2 py-1 bg-[#0A1629] text-[#A3B1C6]"
-            >
-              Cash: {formatCurrency(portfolio.cash)}
-            </Badge>
-          </div>
-        </div>
-
+      <CardContent className="p-6 pt-4">
         <div className="h-64 mt-4">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
@@ -217,6 +220,7 @@ const NetWorthChart = () => {
                 }}
                 labelStyle={{ color: '#A3B1C6' }}
                 formatter={(value: number) => [`$${value.toLocaleString()}`, 'Value']}
+                labelFormatter={(label) => label === 'Start' ? 'Starting Value' : `Round ${label.replace('R', '')}`}
               />
               <ReferenceLine 
                 y={initialValue} 

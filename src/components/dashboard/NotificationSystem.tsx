@@ -3,30 +3,43 @@ import { useGame } from '@/context/GameContext';
 import { X, Check, Info, AlertTriangle, TrendingUp, TrendingDown, Award, DollarSign } from 'lucide-react';
 
 const NotificationSystem = () => {
-  const { notifications } = useGame();
+  const { notifications, settings } = useGame();
   
-  // Filter to only show important notifications
-  const importantNotifications = notifications.filter(notification => {
+  // If notifications are disabled in settings, don't show any
+  if (!settings.notifications) {
+    return null;
+  }
+  
+  // Filter to only show critical notifications
+  const criticalNotifications = notifications.filter(notification => {
     // Only show specific notification types
     return (
+      // Show errors
       notification.type === 'error' || 
+      // Show achievements
       notification.type === 'achievement' || 
-      notification.type === 'warning' ||
-      // For success notifications, only show trade-related ones
+      // Only show warnings for significant events (market crashes or large losses)
+      (notification.type === 'warning' && 
+       (notification.message.includes('crash') || 
+        notification.message.includes('Crash') || 
+        notification.message.includes('dropped') ||
+        notification.message.includes('Lost'))) ||
+      // For success notifications, only show very significant gains
       (notification.type === 'success' && 
-        (notification.message.includes('Bought') || 
-         notification.message.includes('Sold') || 
-         notification.message.includes('Closed')))
+       (notification.message.includes('Profit:') && notification.message.includes('$1,000')))
     );
   });
   
-  if (!importantNotifications || importantNotifications.length === 0) {
+  // Limit to maximum 3 notifications at a time to reduce clutter
+  const limitedNotifications = criticalNotifications.slice(0, 3);
+  
+  if (!limitedNotifications || limitedNotifications.length === 0) {
     return null;
   }
   
   return (
     <div className="fixed bottom-4 right-4 space-y-2 max-w-xs z-20">
-      {importantNotifications.map(notification => {
+      {limitedNotifications.map(notification => {
         let bgColor = 'bg-[#132237] border border-[#1A2B45]';
         let icon = <Info className="h-5 w-5 text-dashboard-neutral" />;
         
@@ -78,18 +91,20 @@ const NotificationSystem = () => {
         );
       })}
       
-      <style jsx>{`
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(10px) scale(0.95);
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          @keyframes slideUp {
+            from {
+              opacity: 0;
+              transform: translateY(10px) scale(0.95);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0) scale(1);
+            }
           }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-      `}</style>
+        `
+      }} />
     </div>
   );
 };
