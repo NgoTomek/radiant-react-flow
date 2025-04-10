@@ -6,7 +6,6 @@ import { useGame } from '@/context/GameContext';
 import { Badge } from '@/components/ui/badge';
 
 // Helper function to generate asset-specific badges
-// Moved outside the component to be accessible by NewsItem
 const getAssetBadge = (assetTag?: string) => {
   if (!assetTag) return null;
   
@@ -38,7 +37,6 @@ const getAssetBadge = (assetTag?: string) => {
 };
 
 // Helper function to determine overall impact type
-// Moved outside the component to be accessible by NewsItem
 function getImpactType(impact: any): 'positive' | 'negative' | 'neutral' {
   if (!impact) return 'neutral';
   
@@ -54,69 +52,14 @@ function getImpactType(impact: any): 'positive' | 'negative' | 'neutral' {
 }
 
 const MarketNews = () => {
-  const { currentNews, assetPrices } = useGame();
+  const { newsHistory, assetPrices } = useGame();
   const [expanded, setExpanded] = useState(false);
   
-  // Generate sample news items based on current news
-  const newsItems = [
-    {
-      id: 1,
-      title: currentNews.message,
-      impact: getImpactType(currentNews.impact), // Call the helper function
-      time: 'Just now',
-      isBreaking: true
-    },
-    {
-      id: 2,
-      title: 'Bitcoin volatility increases after market speculation',
-      impact: 'negative' as const, // Added type assertion
-      time: '15m ago',
-      isBreaking: false,
-      assetTag: 'crypto'
-    },
-    {
-      id: 3,
-      title: 'Gold prices stabilize after recent fluctuations',
-      impact: 'neutral' as const, // Added type assertion
-      time: '32m ago',
-      isBreaking: false,
-      assetTag: 'gold'
-    },
-    {
-      id: 4,
-      title: 'Oil market shows signs of recovery',
-      impact: 'positive' as const, // Added type assertion
-      time: '48m ago',
-      isBreaking: false,
-      assetTag: 'oil'
-    },
-    {
-      id: 5,
-      title: 'Market analysts predict increased volatility for upcoming week',
-      impact: 'neutral' as const, // Added type assertion
-      time: '1h ago',
-      isBreaking: false
-    },
-    {
-      id: 6,
-      title: 'Tech sector outperforming broader market amid innovation surge',
-      impact: 'positive' as const, // Added type assertion
-      time: '1.5h ago',
-      isBreaking: false,
-      assetTag: 'stocks'
-    },
-    {
-      id: 7,
-      title: 'Investors flee to safe-haven assets amid uncertainty',
-      impact: 'negative' as const, // Added type assertion
-      time: '2h ago',
-      isBreaking: false,
-      assetTag: 'gold'
-    }
-  ];
+  // Get the latest news items from history, sorted by most recent first
+  const sortedNewsItems = [...newsHistory].sort((a, b) => b.timestamp - a.timestamp);
   
-  // Display only 4 news items unless expanded
-  const displayItems = expanded ? newsItems : newsItems.slice(0, 4);
+  // Display only a limited number of news items unless expanded
+  const displayItems = expanded ? sortedNewsItems : sortedNewsItems.slice(0, 4);
 
   return (
     <Card className="bg-[#132237] border-none rounded-xl overflow-hidden h-full">
@@ -131,18 +74,24 @@ const MarketNews = () => {
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-4">
-          {displayItems.map((news) => (
-            <NewsItem key={news.id} news={news} />
-          ))}
+          {displayItems.length > 0 ? (
+            displayItems.map((news) => (
+              <NewsItem key={news.id} news={news} />
+            ))
+          ) : (
+            <div className="text-dashboard-text-secondary text-sm text-center py-4">
+              No market news yet. Stay tuned for updates.
+            </div>
+          )}
           
-          {newsItems.length > 4 && (
+          {sortedNewsItems.length > 4 && (
             <Button 
               variant="ghost" 
               size="sm" 
               className="w-full text-[#A3B1C6] hover:text-white border border-[#1A2B45] text-xs mt-2"
               onClick={() => setExpanded(!expanded)}
             >
-              {expanded ? 'Show Less' : `Show ${newsItems.length - 4} More`}
+              {expanded ? 'Show Less' : `Show ${sortedNewsItems.length - 4} More`}
             </Button>
           )}
         </div>
@@ -155,14 +104,27 @@ const NewsItem = ({ news }: {
   news: { 
     id: number;
     title: string;
-    impact: 'positive' | 'negative' | 'neutral';
-    time: string;
-    isBreaking?: boolean;
+    message: string;
+    impact: Record<string, number>;
+    timestamp: number;
+    isCrash?: boolean;
     assetTag?: string;
   }
 }) => {
+  // Calculate how long ago the news was posted
+  const getTimeAgo = () => {
+    const now = Date.now();
+    const diffInSeconds = Math.floor((now - news.timestamp) / 1000);
+    
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    return `${Math.floor(diffInSeconds / 3600)}h ago`;
+  };
+
+  const impact = getImpactType(news.impact);
+  
   const getImpactIcon = () => {
-    switch (news.impact) {
+    switch (impact) {
       case 'positive':
         return <TrendingUp size={16} className="text-dashboard-positive" />;
       case 'negative':
@@ -173,7 +135,7 @@ const NewsItem = ({ news }: {
   };
   
   const getImpactColor = () => {
-    switch (news.impact) {
+    switch (impact) {
       case 'positive':
         return 'bg-dashboard-positive/10';
       case 'negative':
@@ -190,16 +152,16 @@ const NewsItem = ({ news }: {
       </div>
       <div className="flex-1">
         <div className="flex items-start gap-2">
-          {news.isBreaking && (
+          {news.isCrash && (
             <span className="bg-dashboard-negative px-1.5 py-0.5 rounded text-[10px] font-bold text-white uppercase">
               Breaking
             </span>
           )}
           {news.assetTag && getAssetBadge(news.assetTag)}
         </div>
-        <p className="text-white text-sm font-medium">{news.title}</p>
+        <p className="text-white text-sm font-medium">{news.message}</p>
         <div className="flex justify-between items-center mt-1">
-          <p className="text-[#A3B1C6] text-xs">{news.time}</p>
+          <p className="text-[#A3B1C6] text-xs">{getTimeAgo()}</p>
           <Button variant="ghost" size="sm" className="p-0 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
             <Bookmark size={14} className="text-[#A3B1C6]" />
           </Button>
