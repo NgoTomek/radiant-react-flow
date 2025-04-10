@@ -314,7 +314,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [newsHistory, setNewsHistory] = useState<NewsItem[]>([]);
   
   // News timer to control frequency
-  const [newsCountdown, setNewsCountdown] = useState(10);
+  const [newsCountdown, setNewsCountdown] = useState(20);
   
   const [showNewsPopup, setShowNewsPopup] = useState(false);
   const [newsPopup, setNewsPopup] = useState<NewsItem>({
@@ -434,7 +434,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 5000);
     
-    notificationTimeoutRef.current.push(timeoutId);
+    notificationTimeoutsRef.current.push(timeoutId);
     
     return id;
   }, []);
@@ -503,11 +503,11 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
         }
         
-        // Notify of significant price changes (> 10%)
+        // Only notify for very significant price changes (> 15%) to reduce notifications
         const priceChange = (newPrice - (updatedHistory[asset][updatedHistory[asset].length - 2] || newPrice)) / 
           (updatedHistory[asset][updatedHistory[asset].length - 2] || newPrice) * 100;
         
-        if (Math.abs(priceChange) >= 10) {
+        if (Math.abs(priceChange) >= 15) {
           const direction = priceChange > 0 ? 'increased' : 'decreased';
           addNotification(
             `${asset.charAt(0).toUpperCase() + asset.slice(1)} price ${direction} by ${Math.abs(priceChange).toFixed(1)}%!`,
@@ -523,8 +523,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updatedPrices;
     });
     
-    // Randomly generate market opportunity (15% chance per round)
-    if (Math.random() < 0.15 && !marketOpportunity) {
+    // Randomly generate market opportunity (10% chance per round)
+    if (Math.random() < 0.10 && !marketOpportunity) {
       const opportunities = MARKET_OPPORTUNITIES;
       const randomOpportunity = opportunities[Math.floor(Math.random() * opportunities.length)];
       setMarketOpportunity(randomOpportunity);
@@ -535,8 +535,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
   }, [priceHistory, assetTrends, addNotification, marketOpportunity]);
   
-  // Generate news
-  const generateNewsEvent = useCallback(() => {
+  // Generate news with optional popup control
+  const generateNewsEvent = useCallback((showPopup = false) => {
     const newsEvents = NEWS_EVENTS;
     
     // 10% chance for a market crash event
@@ -545,7 +545,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let newsEvent;
     if (isCrash) {
       const crashEvents = newsEvents.filter(event => event.isCrash);
-      newsEvent = crashEvents[Math.floor(Math.random() * crashEvents.length)];
+      newsEvent = crashEvents[Math.floor(Math.random() * crashEvents.length)] || newsEvents[0];
       
       // Update game stats for crash
       setGameStats(prev => ({
@@ -553,30 +553,37 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         marketCrashesWeathered: prev.marketCrashesWeathered + 1
       }));
       
-      // Show alert
+      // Always show alert for market crashes
       setMarketAlert({
         title: "MARKET CRASH!",
         message: "Major market downturn in progress. Consider defensive positions."
       });
       setShowMarketAlert(true);
+      
+      // Force popup for crashes
+      showPopup = true;
     } else {
       const regularEvents = newsEvents.filter(event => !event.isCrash);
-      newsEvent = regularEvents[Math.floor(Math.random() * regularEvents.length)];
+      newsEvent = regularEvents[Math.floor(Math.random() * regularEvents.length)] || newsEvents[0];
     }
     
-    // Store previous news in history (limit to 10 items)
-    setNewsHistory(prev => {
-      const updatedHistory = [
-        {
-          title: currentNews.title || "Market Update",
-          message: currentNews.message,
-          impact: currentNews.impact,
-          tip: currentNews.tip
-        },
-        ...prev
-      ].slice(0, 9); // Keep only last 9 items
-      return updatedHistory;
-    });
+    // Only update history if it's a new message
+    if (currentNews.message !== newsEvent.message) {
+      // Store previous news in history (limit to 10 items)
+      setNewsHistory(prev => {
+        const updatedHistory = [
+          {
+            title: currentNews.title || "Market Update",
+            message: currentNews.message,
+            impact: currentNews.impact,
+            tip: currentNews.tip,
+            isCrash: false
+          },
+          ...prev
+        ].slice(0, 9); // Keep only last 9 items
+        return updatedHistory;
+      });
+    }
     
     // Set current news
     setCurrentNews({
@@ -586,8 +593,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tip: newsEvent.tip
     });
     
-    // Show news popup only for market crash or other important events
-    if (isCrash || Math.random() < 0.3) { // Show popup only 30% of the time
+    // Show popup only if explicitly requested or for crashes
+    if (showPopup) {
       setNewsPopup(newsEvent);
       setShowNewsPopup(true);
     }
@@ -604,8 +611,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearInterval(gameTimerRef.current);
     }
     
-    // Generate initial news
-    generateNewsEvent();
+    // Generate initial news without popup
+    generateNewsEvent(false);
     
     // Set up timer
     gameTimerRef.current = setInterval(() => {
@@ -614,10 +621,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Decrement news countdown
       setNewsCountdown(prev => {
         const newCount = prev - 1;
-        // Generate news approximately every 10 seconds
+        // Generate news approximately every 20-30 seconds (reduced frequency)
         if (newCount <= 0) {
-          generateNewsEvent();
-          return 10; // Reset countdown
+          // Rarely show popups (15% chance)
+          const showPopup = Math.random() < 0.15;
+          generateNewsEvent(showPopup);
+          return Math.floor(Math.random() * 10) + 20; // Random 20-30 seconds
         }
         return newCount;
       });
@@ -633,8 +642,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return nextRound;
             });
             
-            // Generate news for new round (always for round transition)
-            generateNewsEvent();
+            // Generate news for new round with popup only for round transitions
+            generateNewsEvent(true);
             
             // Update market prices
             updateMarketPrices();
@@ -653,8 +662,8 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return prev - 1;
       });
       
-      // Random market updates during each round (5% chance per second - reduced frequency)
-      if (Math.random() < 0.05) {
+      // Random market updates during each round (3% chance per second - greatly reduced frequency)
+      if (Math.random() < 0.03) {
         updateMarketPrices();
       }
       
@@ -752,7 +761,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       impact: {}
     });
     setNewsHistory([]);
-    setNewsCountdown(10);
+    setNewsCountdown(20);
     
     // Reset game progress
     setRound(1);
@@ -789,14 +798,14 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Welcome notification
     addNotification('Game started! Make smart investment decisions.', 'info');
     
-    // Show welcome popup
+    // Show welcome popup (but not on game initialization to avoid the error)
     setNewsPopup({
       title: 'Welcome to Portfolio Panic!',
       message: 'Make strategic investment decisions to maximize your portfolio value.',
       impact: {},
       tip: 'Watch market trends closely and diversify your portfolio to manage risk.'
     });
-    setShowNewsPopup(true);
+    // Don't show popup automatically: setShowNewsPopup(true);
     
   }, [addNotification]);
   
@@ -806,7 +815,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Start game
   const startGame = useCallback(() => {
     initializeGame();
-    startGameTimer();
+    
+    // Small delay before starting the game timer to prevent errors
+    setTimeout(() => {
+      startGameTimer();
+    }, 100);
+    
   }, [initializeGame, startGameTimer]);
   
   // Toggle pause
@@ -945,6 +959,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         profitLoss = (priceDifference / entryPrice) * positionSize;
         
         // Add margin back to cash plus profit or minus loss
+        const positionValue = shortPosition.value;
         const marginReturned = positionValue * 0.5;
         updatedPortfolio.cash += marginReturned + profitLoss;
         
