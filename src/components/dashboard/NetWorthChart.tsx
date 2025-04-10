@@ -1,13 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { useGame } from '@/context/GameContext';
 
 const timeRanges = ['1D', '1W', '1M', '3M', 'ALL'];
 
 const NetWorthChart = () => {
   const [activeRange, setActiveRange] = useState('ALL');
-  const { priceHistory, calculatePortfolioValue, formatCurrency } = useGame();
+  const { priceHistory, calculatePortfolioValue, formatCurrency, round, portfolio } = useGame();
   
   // Create chart data from portfolio history
   const portfolioValue = calculatePortfolioValue();
@@ -25,31 +26,112 @@ const NetWorthChart = () => {
       priceHistory.crypto?.length || 0
     );
     
-    if (maxHistoryLength <= 1) {
-      return [{ name: 'Start', value: initialValue }];
-    }
+    // Track more realistic portfolio value history
+    let cashHistory = [initialValue];
+    let investedValue = 0;
     
-    // Create data points based on price history trends
-    return Array.from({ length: maxHistoryLength }).map((_, index) => {
-      // Simulate portfolio value based on asset price trends
-      let simulatedValue;
-      if (index === 0) {
-        simulatedValue = initialValue;
-      } else if (index === maxHistoryLength - 1) {
-        simulatedValue = portfolioValue;
-      } else {
-        // Create a somewhat realistic curve between start and current
-        const progress = index / (maxHistoryLength - 1);
-        const randomFactor = 0.9 + Math.random() * 0.2; // 0.9 to 1.1
-        simulatedValue = initialValue + (portfolioValue - initialValue) * progress * randomFactor;
+    // Starting portfolio for simulation
+    let simulatedPortfolio = {
+      cash: initialValue,
+      stocks: 0,
+      oil: 0,
+      gold: 0,
+      crypto: 0
+    };
+    
+    // Simulate investment decisions throughout history
+    for (let i = 1; i < maxHistoryLength; i++) {
+      // Simulate some trading activity
+      const tradeChance = 0.3; // 30% chance of trading each round
+      if (Math.random() < tradeChance) {
+        // Pick a random asset to trade
+        const assets = ['stocks', 'oil', 'gold', 'crypto'];
+        const assetToTrade = assets[Math.floor(Math.random() * assets.length)] as keyof typeof simulatedPortfolio;
+        
+        // Buy or sell decision
+        const isBuy = simulatedPortfolio.cash > 0 && Math.random() < 0.7; // More likely to buy
+        
+        if (isBuy && simulatedPortfolio.cash > 0) {
+          // Buy some amount (10-50% of available cash)
+          const amountToSpend = simulatedPortfolio.cash * (0.1 + Math.random() * 0.4);
+          const price = priceHistory[assetToTrade]?.[i] || priceHistory[assetToTrade]?.[0] || 1;
+          
+          const quantity = amountToSpend / price;
+          simulatedPortfolio[assetToTrade] += quantity;
+          simulatedPortfolio.cash -= amountToSpend;
+        } 
+        else if (!isBuy && simulatedPortfolio[assetToTrade] > 0) {
+          // Sell some amount (10-70% of holdings)
+          const amountToSell = simulatedPortfolio[assetToTrade] * (0.1 + Math.random() * 0.6);
+          const price = priceHistory[assetToTrade]?.[i] || priceHistory[assetToTrade]?.[0] || 1;
+          
+          const value = amountToSell * price;
+          simulatedPortfolio[assetToTrade] -= amountToSell;
+          simulatedPortfolio.cash += value;
+        }
       }
       
-      return {
-        name: index === 0 ? 'Start' : `Round ${index}`,
-        value: Math.round(simulatedValue)
-      };
-    });
-  }, [priceHistory, portfolioValue, initialValue]);
+      // Calculate total value after trades
+      const totalValue = simulatedPortfolio.cash +
+        simulatedPortfolio.stocks * (priceHistory.stocks?.[i] || priceHistory.stocks?.[0] || 0) +
+        simulatedPortfolio.oil * (priceHistory.oil?.[i] || priceHistory.oil?.[0] || 0) +
+        simulatedPortfolio.gold * (priceHistory.gold?.[i] || priceHistory.gold?.[0] || 0) +
+        simulatedPortfolio.crypto * (priceHistory.crypto?.[i] || priceHistory.crypto?.[0] || 0);
+      
+      cashHistory.push(totalValue);
+    }
+    
+    // If we're in the middle of a game, make the last value match the current portfolio
+    if (round > 1 && maxHistoryLength > 0) {
+      cashHistory[cashHistory.length - 1] = portfolioValue;
+    }
+    
+    // Create chart data points
+    return cashHistory.map((value, index) => ({
+      name: index === 0 ? 'Start' : `Round ${index}`,
+      value: Math.round(value),
+      time: `Day ${index + 1}`
+    }));
+  }, [priceHistory, portfolioValue, initialValue, round]);
+
+  // Check if portfolio is up or down for highlighting
+  const isPositiveReturn = returnPercentage >= 0;
+  
+  // Filter data based on selected time range
+  const filteredData = useMemo(() => {
+    if (activeRange === 'ALL' || chartData.length <= 1) {
+      return chartData;
+    }
+    
+    let dataPoints: number;
+    switch (activeRange) {
+      case '1D':
+        dataPoints = 1;
+        break;
+      case '1W':
+        dataPoints = 7;
+        break;
+      case '1M':
+        dataPoints = 30;
+        break;
+      case '3M':
+        dataPoints = 90;
+        break;
+      default:
+        dataPoints = chartData.length;
+    }
+    
+    // Take the most recent N data points
+    return chartData.slice(-Math.min(dataPoints, chartData.length));
+  }, [chartData, activeRange]);
+
+  // Calculate min/max values for chart display with padding
+  const dataMin = Math.min(...filteredData.map(d => d.value));
+  const dataMax = Math.max(...filteredData.map(d => d.value));
+  const yDomain = [
+    Math.max(0, dataMin - (dataMax - dataMin) * 0.1), // Lower bound with 10% padding
+    dataMax + (dataMax - dataMin) * 0.1 // Upper bound with 10% padding
+  ];
 
   return (
     <Card className="bg-[#132237] border-none rounded-xl overflow-hidden">
@@ -79,16 +161,27 @@ const NetWorthChart = () => {
             <p className="text-[#A3B1C6] text-sm">Current</p>
             <p className="text-white text-2xl font-bold">{formatCurrency(portfolioValue)}</p>
           </div>
-          <div className="flex items-center gap-1 px-2 py-1 bg-[#0A1629] rounded-lg">
-            <span className="text-dashboard-positive text-sm font-medium">+{returnPercentage.toFixed(1)}%</span>
+          <div className="flex items-center gap-2">
+            <Badge 
+              className={`px-2 py-1 ${isPositiveReturn 
+                ? 'bg-dashboard-positive/20 text-dashboard-positive' 
+                : 'bg-dashboard-negative/20 text-dashboard-negative'}`}
+            >
+              {isPositiveReturn ? '+' : ''}{returnPercentage.toFixed(1)}%
+            </Badge>
+            <Badge 
+              className="px-2 py-1 bg-[#0A1629] text-[#A3B1C6]"
+            >
+              Cash: {formatCurrency(portfolio.cash)}
+            </Badge>
           </div>
         </div>
 
         <div className="h-64 mt-4">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
-              data={chartData}
-              margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
+              data={filteredData}
+              margin={{ top: 10, right: 5, left: 5, bottom: 5 }}
             >
               <defs>
                 <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
@@ -103,8 +196,11 @@ const NetWorthChart = () => {
                 tick={{ fill: '#A3B1C6', fontSize: 10 }}
               />
               <YAxis 
-                hide={true}
-                domain={['dataMin - 2000', 'dataMax + 2000']} 
+                domain={yDomain}
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#A3B1C6', fontSize: 10 }}
+                tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
               />
               <CartesianGrid 
                 vertical={false} 
@@ -122,6 +218,17 @@ const NetWorthChart = () => {
                 labelStyle={{ color: '#A3B1C6' }}
                 formatter={(value: number) => [`$${value.toLocaleString()}`, 'Value']}
               />
+              <ReferenceLine 
+                y={initialValue} 
+                stroke="#A3B1C6" 
+                strokeDasharray="3 3" 
+                label={{ 
+                  value: 'Initial', 
+                  position: 'right', 
+                  fill: '#A3B1C6',
+                  fontSize: 10 
+                }} 
+              />
               <Area 
                 type="monotone" 
                 dataKey="value" 
@@ -129,9 +236,34 @@ const NetWorthChart = () => {
                 strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorValue)" 
+                activeDot={{ r: 6, fill: '#FF6B00', stroke: '#FFFFFF' }}
               />
             </AreaChart>
           </ResponsiveContainer>
+        </div>
+        
+        {/* Volatility indicators or insights */}
+        <div className="mt-4 flex gap-2 flex-wrap">
+          {returnPercentage > 10 && (
+            <Badge className="bg-dashboard-accent/20 text-dashboard-accent">
+              Strong Performance
+            </Badge>
+          )}
+          {returnPercentage < -10 && (
+            <Badge className="bg-dashboard-negative/20 text-dashboard-negative">
+              High Volatility
+            </Badge>
+          )}
+          {portfolioValue > initialValue * 1.3 && (
+            <Badge className="bg-dashboard-positive/20 text-dashboard-positive">
+              +30% Benchmark Reached
+            </Badge>
+          )}
+          {Math.abs(filteredData[filteredData.length - 1]?.value - filteredData[filteredData.length - 2]?.value) / filteredData[filteredData.length - 2]?.value > 0.05 && (
+            <Badge className="bg-[#3A7BFF]/20 text-[#3A7BFF]">
+              Recent Price Swing
+            </Badge>
+          )}
         </div>
       </CardContent>
     </Card>
