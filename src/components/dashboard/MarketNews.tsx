@@ -5,6 +5,54 @@ import { Button } from '@/components/ui/button';
 import { useGame } from '@/context/GameContext';
 import { Badge } from '@/components/ui/badge';
 
+// Helper function to generate asset-specific badges
+// Moved outside the component to be accessible by NewsItem
+const getAssetBadge = (assetTag?: string) => {
+  if (!assetTag) return null;
+  
+  let color;
+  switch(assetTag) {
+    case 'stocks':
+      color = 'bg-[#A2AAAD]/20 text-[#A2AAAD]';
+      break;
+    case 'oil':
+      color = 'bg-[#444]/20 text-gray-400';
+      break;
+    case 'gold':
+      color = 'bg-[#FFD700]/20 text-[#D4AF37]';
+      break;
+    case 'crypto':
+      color = 'bg-[#F7931A]/20 text-[#F7931A]';
+      break;
+    default:
+      color = 'bg-[#A3B1C6]/20 text-[#A3B1C6]';
+  }
+  
+  const symbol = assetTag.charAt(0).toUpperCase() + assetTag.slice(1);
+  
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded ${color}`}>
+      {symbol}
+    </span>
+  );
+};
+
+// Helper function to determine overall impact type
+// Moved outside the component to be accessible by NewsItem
+function getImpactType(impact: any): 'positive' | 'negative' | 'neutral' {
+  if (!impact) return 'neutral';
+  
+  // Calculate average impact
+  const values = Object.values(impact) as number[]; // Added type assertion
+  if (values.length === 0) return 'neutral';
+  
+  const avg = values.reduce((sum, val) => sum + val, 0) / values.length; // Fixed reduce type
+  
+  if (avg > 1.02) return 'positive';
+  if (avg < 0.98) return 'negative';
+  return 'neutral';
+}
+
 const MarketNews = () => {
   const { currentNews, assetPrices } = useGame();
   const [expanded, setExpanded] = useState(false);
@@ -14,14 +62,14 @@ const MarketNews = () => {
     {
       id: 1,
       title: currentNews.message,
-      impact: getImpactType(currentNews.impact),
+      impact: getImpactType(currentNews.impact), // Call the helper function
       time: 'Just now',
       isBreaking: true
     },
     {
       id: 2,
       title: 'Bitcoin volatility increases after market speculation',
-      impact: 'negative',
+      impact: 'negative' as const, // Added type assertion
       time: '15m ago',
       isBreaking: false,
       assetTag: 'crypto'
@@ -29,7 +77,7 @@ const MarketNews = () => {
     {
       id: 3,
       title: 'Gold prices stabilize after recent fluctuations',
-      impact: 'neutral',
+      impact: 'neutral' as const, // Added type assertion
       time: '32m ago',
       isBreaking: false,
       assetTag: 'gold'
@@ -37,7 +85,7 @@ const MarketNews = () => {
     {
       id: 4,
       title: 'Oil market shows signs of recovery',
-      impact: 'positive',
+      impact: 'positive' as const, // Added type assertion
       time: '48m ago',
       isBreaking: false,
       assetTag: 'oil'
@@ -45,14 +93,14 @@ const MarketNews = () => {
     {
       id: 5,
       title: 'Market analysts predict increased volatility for upcoming week',
-      impact: 'neutral',
+      impact: 'neutral' as const, // Added type assertion
       time: '1h ago',
       isBreaking: false
     },
     {
       id: 6,
       title: 'Tech sector outperforming broader market amid innovation surge',
-      impact: 'positive',
+      impact: 'positive' as const, // Added type assertion
       time: '1.5h ago',
       isBreaking: false,
       assetTag: 'stocks'
@@ -60,7 +108,7 @@ const MarketNews = () => {
     {
       id: 7,
       title: 'Investors flee to safe-haven assets amid uncertainty',
-      impact: 'negative',
+      impact: 'negative' as const, // Added type assertion
       time: '2h ago',
       isBreaking: false,
       assetTag: 'gold'
@@ -69,52 +117,6 @@ const MarketNews = () => {
   
   // Display only 4 news items unless expanded
   const displayItems = expanded ? newsItems : newsItems.slice(0, 4);
-  
-  // Helper function to determine overall impact type
-  function getImpactType(impact: any): 'positive' | 'negative' | 'neutral' {
-    if (!impact) return 'neutral';
-    
-    // Calculate average impact
-    const values = Object.values(impact);
-    if (values.length === 0) return 'neutral';
-    
-    const avg = values.reduce((sum, val) => sum + (val as number), 0) / values.length;
-    
-    if (avg > 1.02) return 'positive';
-    if (avg < 0.98) return 'negative';
-    return 'neutral';
-  }
-  
-  // Helper function to generate asset-specific badges
-  const getAssetBadge = (assetTag?: string) => {
-    if (!assetTag) return null;
-    
-    let color;
-    switch(assetTag) {
-      case 'stocks':
-        color = 'bg-[#A2AAAD]/20 text-[#A2AAAD]';
-        break;
-      case 'oil':
-        color = 'bg-[#444]/20 text-gray-400';
-        break;
-      case 'gold':
-        color = 'bg-[#FFD700]/20 text-[#D4AF37]';
-        break;
-      case 'crypto':
-        color = 'bg-[#F7931A]/20 text-[#F7931A]';
-        break;
-      default:
-        color = 'bg-[#A3B1C6]/20 text-[#A3B1C6]';
-    }
-    
-    const symbol = assetTag.charAt(0).toUpperCase() + assetTag.slice(1);
-    
-    return (
-      <span className={`text-xs px-1.5 py-0.5 rounded ${color}`}>
-        {symbol}
-      </span>
-    );
-  };
 
   return (
     <Card className="bg-[#132237] border-none rounded-xl overflow-hidden h-full">
