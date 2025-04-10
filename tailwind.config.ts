@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,18 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				// Custom colors for portfolio dashboard
+				dashboard: {
+					background: '#0A1629',
+					card: '#132237',
+					accent: '#FF6B00',
+					positive: '#25C685',
+					negative: '#FF5A5A',
+					text: {
+						primary: '#FFFFFF',
+						secondary: '#A3B1C6',
+					}
 				}
 			},
 			borderRadius: {
