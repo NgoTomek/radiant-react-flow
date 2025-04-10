@@ -1,9 +1,18 @@
-
 import React from 'react';
-import { ArrowDown, ArrowUp, DollarSign, TrendingUp, Wallet } from 'lucide-react';
+import { ArrowUp, DollarSign, TrendingUp, Wallet } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { useGame } from '@/context/GameContext';
 
 const PortfolioOverview = () => {
+  const { portfolio, calculatePortfolioValue, formatCurrency, gameResult } = useGame();
+  
+  // Calculate portfolio metrics
+  const portfolioValue = calculatePortfolioValue();
+  const initialCash = 10000; // Starting cash
+  const invested = portfolioValue - portfolio.cash;
+  const returns = portfolioValue - initialCash;
+  const returnPercentage = ((portfolioValue - initialCash) / initialCash) * 100;
+  
   return (
     <Card className="bg-[#132237] border-none rounded-xl overflow-hidden">
       <CardContent className="p-6">
@@ -11,10 +20,10 @@ const PortfolioOverview = () => {
           <div className="space-y-4">
             <h2 className="text-[#A3B1C6] text-sm font-medium">Current Portfolio Value</h2>
             <div className="flex items-end gap-3">
-              <div className="text-4xl font-bold text-white">$29,500</div>
+              <div className="text-4xl font-bold text-white">{formatCurrency(portfolioValue)}</div>
               <div className="flex items-center text-dashboard-positive mb-1">
                 <ArrowUp size={16} />
-                <span className="text-sm font-medium">+3.8%</span>
+                <span className="text-sm font-medium">+{returnPercentage.toFixed(1)}%</span>
               </div>
             </div>
           </div>
@@ -23,13 +32,14 @@ const PortfolioOverview = () => {
             <MetricCard 
               icon={<DollarSign size={20} className="text-dashboard-accent" />}
               label="INVESTED" 
-              value="$20,000" 
+              value={formatCurrency(invested)} 
             />
             <MetricCard 
               icon={<TrendingUp size={20} className="text-dashboard-positive" />}
               label="RETURNS" 
-              value="+$9,500" 
-              isPositive={true}
+              value={`${returns >= 0 ? '+' : ''}${formatCurrency(returns)}`} 
+              isPositive={returns >= 0}
+              isNegative={returns < 0}
             />
           </div>
 
@@ -37,16 +47,16 @@ const PortfolioOverview = () => {
             <MetricCard 
               icon={<Wallet size={20} className="text-[#A3B1C6]" />}
               label="AVAILABLE CASH" 
-              value="$1,050" 
+              value={formatCurrency(portfolio.cash)} 
             />
             <div className="bg-[#0A1629] rounded-lg p-4 flex items-center justify-between">
               <div>
                 <div className="text-[#A3B1C6] text-xs font-medium">TOTAL NET WORTH</div>
-                <div className="text-xl font-bold text-white">$30,550</div>
+                <div className="text-xl font-bold text-white">{formatCurrency(portfolioValue)}</div>
               </div>
               <div className="flex items-center text-dashboard-positive">
                 <ArrowUp size={14} />
-                <span className="text-xs font-medium">+52.8%</span>
+                <span className="text-xs font-medium">+{returnPercentage.toFixed(1)}%</span>
               </div>
             </div>
           </div>
