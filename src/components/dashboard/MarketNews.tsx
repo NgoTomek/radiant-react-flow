@@ -1,44 +1,55 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { ChevronRight, Info, TrendingDown, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-type NewsItem = {
-  id: number;
-  title: string;
-  impact: 'positive' | 'negative' | 'neutral';
-  time: string;
-};
-
-const newsData: NewsItem[] = [
-  {
-    id: 1,
-    title: 'Tesla announces new gigafactory in Europe',
-    impact: 'positive',
-    time: '12m ago',
-  },
-  {
-    id: 2,
-    title: 'Bitcoin drops 5% after regulatory concerns',
-    impact: 'negative',
-    time: '24m ago',
-  },
-  {
-    id: 3,
-    title: 'Oil prices stabilize after OPEC+ meeting',
-    impact: 'neutral',
-    time: '36m ago',
-  },
-  {
-    id: 4,
-    title: 'Apple reports record quarterly profit',
-    impact: 'positive',
-    time: '45m ago',
-  },
-];
+import { useGame } from '@/context/GameContext';
 
 const MarketNews = () => {
+  const { currentNews } = useGame();
+  
+  // Generate sample news items based on current news
+  const newsItems = [
+    {
+      id: 1,
+      title: currentNews.message,
+      impact: getImpactType(currentNews.impact),
+      time: 'Just now'
+    },
+    {
+      id: 2,
+      title: 'Bitcoin volatility increases after market speculation',
+      impact: 'negative',
+      time: '15m ago'
+    },
+    {
+      id: 3,
+      title: 'Gold prices stabilize after recent fluctuations',
+      impact: 'neutral',
+      time: '32m ago'
+    },
+    {
+      id: 4,
+      title: 'Oil market shows signs of recovery',
+      impact: 'positive',
+      time: '48m ago'
+    }
+  ];
+  
+  // Helper function to determine overall impact type
+  function getImpactType(impact: any): 'positive' | 'negative' | 'neutral' {
+    if (!impact) return 'neutral';
+    
+    // Calculate average impact
+    const values = Object.values(impact);
+    if (values.length === 0) return 'neutral';
+    
+    const avg = values.reduce((sum, val) => sum + (val as number), 0) / values.length;
+    
+    if (avg > 1.02) return 'positive';
+    if (avg < 0.98) return 'negative';
+    return 'neutral';
+  }
+
   return (
     <Card className="bg-[#132237] border-none rounded-xl overflow-hidden">
       <CardHeader className="p-6 pb-0">
@@ -52,7 +63,7 @@ const MarketNews = () => {
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-4">
-          {newsData.map((news) => (
+          {newsItems.map((news) => (
             <NewsItem key={news.id} news={news} />
           ))}
         </div>
@@ -61,7 +72,14 @@ const MarketNews = () => {
   );
 };
 
-const NewsItem = ({ news }: { news: NewsItem }) => {
+const NewsItem = ({ news }: { 
+  news: { 
+    id: number;
+    title: string;
+    impact: 'positive' | 'negative' | 'neutral';
+    time: string;
+  }
+}) => {
   const getImpactIcon = () => {
     switch (news.impact) {
       case 'positive':
