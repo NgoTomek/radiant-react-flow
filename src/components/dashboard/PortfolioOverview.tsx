@@ -1,18 +1,61 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ArrowUp, ArrowDown, DollarSign, TrendingUp, TrendingDown, Wallet, PieChart, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { useGame } from '@/context/GameContext';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const PortfolioOverview = () => {
-  const { portfolio, calculatePortfolioValue, formatCurrency, assetData, assetPrices, gameResult } = useGame();
+  const { portfolio, calculatePortfolioValue, formatCurrency, assetData, assetPrices, portfolioHistory } = useGame();
   
   // Calculate portfolio metrics
   const portfolioValue = calculatePortfolioValue();
-  const initialCash = 10000; // Starting cash
-  const invested = portfolioValue - portfolio.cash;
+  const initialCash = 10000; // Starting value
+  const invested = useMemo(() => {
+    // Calculate total invested in assets
+    let total = 0;
+    Object.entries(assetData.quantities).forEach(([asset, quantity]) => {
+      if (quantity && quantity > 0) {
+        const assetValue = quantity * assetPrices[asset as keyof typeof assetPrices];
+        total += assetValue;
+      }
+    });
+    return total;
+  }, [assetData, assetPrices]);
+  
   const returns = portfolioValue - initialCash;
   const returnPercentage = ((portfolioValue - initialCash) / initialCash) * 100;
+  
+  // Calculate unrealized profit/loss on holdings
+  const unrealizedProfitLoss = useMemo(() => {
+    let total = 0;
+    Object.entries(assetData.quantities).forEach(([asset, quantity]) => {
+      if (quantity && quantity > 0) {
+        const assetType = asset as keyof typeof assetPrices;
+        const currentValue = quantity * assetPrices[assetType];
+        const costBasis = assetData.dollarValues[assetType] || 0;
+        total += currentValue - costBasis;
+      }
+    });
+    return total;
+  }, [assetData, assetPrices]);
+  
+  // Calculate short position profit/loss
+  const shortPositionsProfitLoss = useMemo(() => {
+    let total = 0;
+    Object.entries(assetData.shorts).forEach(([asset, position]) => {
+      if (position && position.active) {
+        const assetType = asset as keyof typeof assetPrices;
+        const entryPrice = position.price;
+        const currentPrice = assetPrices[assetType];
+        const value = position.value;
+        
+        // Shorts profit when price goes down
+        const percentChange = (entryPrice - currentPrice) / entryPrice;
+        total += value * percentChange;
+      }
+    });
+    return total;
+  }, [assetData.shorts, assetPrices]);
   
   // Calculate portfolio risk level
   const calculateRiskLevel = () => {
@@ -78,6 +121,16 @@ const PortfolioOverview = () => {
   
   const topHoldings = calculateTopHoldings();
   
+  // Calculate recent change in portfolio value
+  const recentChangePercentage = useMemo(() => {
+    if (portfolioHistory.length >= 2) {
+      const currentValue = portfolioHistory[portfolioHistory.length - 1];
+      const previousValue = portfolioHistory[portfolioHistory.length - 2];
+      return ((currentValue - previousValue) / previousValue) * 100;
+    }
+    return 0;
+  }, [portfolioHistory]);
+  
   // Calculate diversification percentage
   const calculateDiversification = () => {
     const assetTypes = Object.keys(assetPrices).length;
@@ -106,6 +159,24 @@ const PortfolioOverview = () => {
                 <span className="text-sm font-medium">{returns >= 0 ? '+' : ''}{returnPercentage.toFixed(1)}%</span>
               </div>
             </div>
+            
+            {/* Recent change indicator */}
+            {recentChangePercentage !== 0 && (
+              <div className={`inline-flex items-center gap-1 text-xs rounded-full px-2 py-1 
+                ${recentChangePercentage > 0 
+                  ? 'bg-dashboard-positive/10 text-dashboard-positive' 
+                  : 'bg-dashboard-negative/10 text-dashboard-negative'}`}
+              >
+                {recentChangePercentage > 0 
+                  ? <TrendingUp size={12} /> 
+                  : <TrendingDown size={12} />
+                }
+                <span>
+                  {recentChangePercentage > 0 ? '+' : ''}
+                  {recentChangePercentage.toFixed(1)}% this round
+                </span>
+              </div>
+            )}
             
             {/* Risk indicator */}
             <div className="flex items-center gap-2 mt-2">
@@ -184,7 +255,7 @@ const PortfolioOverview = () => {
                 <TrendingUp size={20} className="text-dashboard-positive" /> : 
                 <TrendingDown size={20} className="text-dashboard-negative" />
               }
-              label="RETURNS" 
+              label="TOTAL RETURNS" 
               value={`${returns >= 0 ? '+' : ''}${formatCurrency(returns)}`} 
               percentage={Math.abs(returnPercentage)}
               isPositive={returns >= 0}
@@ -203,25 +274,24 @@ const PortfolioOverview = () => {
             />
             <div className="bg-[#0A1629] rounded-lg p-4 flex flex-col justify-between">
               <div>
-                <div className="text-[#A3B1C6] text-xs font-medium">PORTFOLIO BREAKDOWN</div>
-                <div className="mt-1 space-y-1.5">
-                  {topHoldings.top && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-[#A3B1C6]">Largest: {topHoldings.top.asset}</span>
-                      <span className="text-xs text-white">{formatCurrency(topHoldings.top.value)}</span>
-                    </div>
-                  )}
-                  {Object.values(assetData.shorts).some(position => position && position.active) && (
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-[#A3B1C6]">Short Positions</span>
-                      <span className="text-xs text-dashboard-negative">Active</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-[#A3B1C6]">Cash</span>
-                    <span className="text-xs text-white">{formatCurrency(portfolio.cash)}</span>
-                  </div>
+                <div className="text-[#A3B1C6] text-xs font-medium">UNREALIZED P/L</div>
+                <div className={`mt-1 font-bold text-xl ${
+                  unrealizedProfitLoss >= 0 ? 'text-dashboard-positive' : 'text-dashboard-negative'
+                }`}>
+                  {unrealizedProfitLoss >= 0 ? '+' : ''}
+                  {formatCurrency(unrealizedProfitLoss)}
                 </div>
+                
+                {/* Show short position profit/loss if any */}
+                {hasShorts && (
+                  <div className="text-xs mt-1 flex items-center gap-1">
+                    <span className="text-[#A3B1C6]">Short Positions:</span>
+                    <span className={shortPositionsProfitLoss >= 0 ? 'text-dashboard-positive' : 'text-dashboard-negative'}>
+                      {shortPositionsProfitLoss >= 0 ? '+' : ''}
+                      {formatCurrency(shortPositionsProfitLoss)}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-between mt-2">
                 <div className="flex -space-x-1">
@@ -230,7 +300,7 @@ const PortfolioOverview = () => {
                     let bgColor;
                     switch(asset) {
                       case 'stocks': bgColor = 'bg-[#A2AAAD]'; break;
-                      case 'oil': bgColor = 'bg-gray-700'; break;
+                      case 'oil': bgColor = 'bg-[#607D8B]'; break;
                       case 'gold': bgColor = 'bg-[#FFD700]'; break;
                       case 'crypto': bgColor = 'bg-[#F7931A]'; break;
                       default: bgColor = 'bg-gray-500';
