@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { Card, CardContent } from '@/components/ui/card';
 import { useGame } from '@/context/GameContext';
@@ -6,9 +6,25 @@ import { useGame } from '@/context/GameContext';
 const PortfolioBreakdown = () => {
   const { assetData, assetPrices, portfolio, calculatePortfolioValue, formatCurrency } = useGame();
   const [chartData, setChartData] = useState<any[]>([]);
+  const previousPortfolioRef = useRef(null);
+  const previousAssetDataRef = useRef(null);
   
-  // Update chart data whenever portfolio changes
+  // Update chart data whenever relevant portfolio data changes
   useEffect(() => {
+    // Skip update if the data hasn't meaningfully changed
+    if (
+      JSON.stringify(previousPortfolioRef.current) === JSON.stringify(portfolio) &&
+      JSON.stringify(previousAssetDataRef.current) === JSON.stringify(assetData)
+    ) {
+      return;
+    }
+    
+    // Update refs
+    previousPortfolioRef.current = JSON.parse(JSON.stringify(portfolio));
+    previousAssetDataRef.current = JSON.parse(JSON.stringify(assetData));
+    
+    console.log("Updating portfolio breakdown with new data:", portfolio, assetData);
+    
     // Calculate total portfolio value and breakdown
     const portfolioValue = calculatePortfolioValue();
     const cashValue = portfolio.cash;
@@ -21,6 +37,8 @@ const PortfolioBreakdown = () => {
       if (quantity && quantity > 0) {
         const assetType = asset as 'stocks' | 'oil' | 'gold' | 'crypto';
         const value = quantity * assetPrices[assetType];
+        
+        console.log(`Asset ${assetType}: ${quantity} units at ${assetPrices[assetType]} = ${value}`);
         
         let color = '';
         let name = '';
@@ -59,8 +77,22 @@ const PortfolioBreakdown = () => {
       data.push({ name: 'Cash', value: cashValue, color: '#4CAF50' });
     }
     
+    console.log("Updated chart data:", data);
     setChartData(data);
   }, [assetData, assetPrices, portfolio, calculatePortfolioValue]);
+  
+  // Force refresh on component mount
+  useEffect(() => {
+    const portfolioValue = calculatePortfolioValue();
+    const cashValue = portfolio.cash;
+    
+    const data = [{ name: 'Cash', value: cashValue, color: '#4CAF50' }];
+    setChartData(data);
+    
+    // Set initial refs
+    previousPortfolioRef.current = JSON.parse(JSON.stringify(portfolio));
+    previousAssetDataRef.current = JSON.parse(JSON.stringify(assetData));
+  }, []);
   
   return (
     <Card className="bg-[#132237] border-none rounded-xl overflow-hidden">

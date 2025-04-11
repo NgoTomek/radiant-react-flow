@@ -9,110 +9,34 @@ const timeRanges = ['1R', '3R', '5R', 'ALL'];
 
 const NetWorthChart = () => {
   const [activeRange, setActiveRange] = useState('ALL');
-  const { priceHistory, calculatePortfolioValue, formatCurrency, round, portfolio } = useGame();
+  const { priceHistory, calculatePortfolioValue, formatCurrency, round, portfolio, portfolioHistory, totalRounds } = useGame();
   
-  // Create chart data from portfolio history
+  // Create chart data from actual portfolio history
   const portfolioValue = calculatePortfolioValue();
   const initialValue = 10000; // Starting value
   const returnPercentage = ((portfolioValue - initialValue) / initialValue) * 100;
   
-  // Create sample historical data based on price history
-  // In a real implementation, this would track portfolio value over time
+  // Create chart data from the portfolioHistory with proper round labeling
   const chartData = useMemo(() => {
-    // Use the longest price history as a reference
-    const maxHistoryLength = Math.max(
-      priceHistory.stocks?.length || 0,
-      priceHistory.oil?.length || 0,
-      priceHistory.gold?.length || 0,
-      priceHistory.crypto?.length || 0
-    );
-    
-    // Track more realistic portfolio value history
-    let cashHistory = [initialValue];
-    let investedValue = 0;
-    
-    // Starting portfolio for simulation
-    let simulatedPortfolio = {
-      cash: initialValue,
-      stocks: 0,
-      oil: 0,
-      gold: 0,
-      crypto: 0
-    };
-    
-    // Simulate investment decisions throughout history
-    for (let i = 1; i < maxHistoryLength; i++) {
-      // Simulate some trading activity
-      const tradeChance = 0.3;
-      
-      // In this simplified simulation, sometimes we buy, sometimes we sell
-      if (Math.random() < tradeChance && simulatedPortfolio.cash > 1000) {
-        // Choose an asset to invest in
-        const assets = ['stocks', 'oil', 'gold', 'crypto'];
-        const chosenAsset = assets[Math.floor(Math.random() * assets.length)] as keyof typeof simulatedPortfolio;
-        
-        if (chosenAsset !== 'cash') {
-          // Invest some portion of cash
-          const investmentAmount = simulatedPortfolio.cash * (Math.random() * 0.2 + 0.1); // 10-30% of cash
-          simulatedPortfolio.cash -= investmentAmount;
-          
-          // Calculate units bought
-          const price = priceHistory[chosenAsset as keyof typeof priceHistory]?.[i] || 1;
-          const unitsBought = investmentAmount / price;
-          simulatedPortfolio[chosenAsset] += unitsBought;
-          
-          investedValue += investmentAmount;
-        }
-      }
-      // Occasionally sell assets
-      else if (Math.random() < 0.2 && investedValue > 0) {
-        // Choose an asset to sell
-        const assets = ['stocks', 'oil', 'gold', 'crypto'].filter(asset => 
-          simulatedPortfolio[asset as keyof typeof simulatedPortfolio] > 0
-        );
-        
-        if (assets.length > 0) {
-          const chosenAsset = assets[Math.floor(Math.random() * assets.length)] as keyof typeof simulatedPortfolio;
-          
-          // Sell some or all of the asset
-          const sellPercentage = Math.random() * 0.5 + 0.5; // 50-100%
-          const unitsSold = simulatedPortfolio[chosenAsset] * sellPercentage;
-          simulatedPortfolio[chosenAsset] -= unitsSold;
-          
-          // Add proceeds to cash
-          const price = priceHistory[chosenAsset as keyof typeof priceHistory]?.[i] || 1;
-          const sellValue = unitsSold * price;
-          simulatedPortfolio.cash += sellValue;
-          
-          investedValue -= sellValue;
-        }
-      }
-      
-      // Calculate total portfolio value at this point
-      let totalValue = simulatedPortfolio.cash;
-      Object.entries(simulatedPortfolio).forEach(([key, units]) => {
-        if (key !== 'cash') {
-          const price = priceHistory[key as keyof typeof priceHistory]?.[i] || 1;
-          totalValue += units * price;
-        }
-      });
-      
-      cashHistory.push(totalValue);
+    if (!portfolioHistory || portfolioHistory.length === 0) {
+      return [{ name: 'Start', value: initialValue, round: 0 }];
     }
     
-    // If we're in the middle of a game, make the last value match the current portfolio
-    if (round > 1 && maxHistoryLength > 0) {
-      cashHistory[cashHistory.length - 1] = portfolioValue;
-    }
-    
-    // Create chart data points with rounds as the x-axis labels
-    return cashHistory.map((value, index) => ({
-      name: index === 0 ? 'Start' : `R${index}`,
-      value: Math.round(value),
-      round: index
-    }));
-  }, [priceHistory, portfolioValue, initialValue, round]);
-
+    // Map each value in portfolio history to a data point with proper round label
+    return portfolioHistory.map((value, index) => {
+      // Different label formats:
+      // - Index 0 is "Start" (initial value)
+      // - Other indices correspond to the round number
+      const roundLabel = index === 0 ? 'Start' : `R${index}`;
+      
+      return {
+        name: roundLabel,
+        value: Math.round(value),
+        round: index
+      };
+    });
+  }, [portfolioHistory, initialValue]);
+  
   // Check if portfolio is up or down for highlighting
   const isPositiveReturn = returnPercentage >= 0;
   
@@ -137,9 +61,22 @@ const NetWorthChart = () => {
         roundsToShow = chartData.length;
     }
     
-    // Take the most recent N rounds of data points
-    return chartData.slice(-Math.min(roundsToShow + 1, chartData.length));
-  }, [chartData, activeRange]);
+    // For 1R, 3R, 5R - show the most recent N rounds, starting with "Start"
+    // Always include "Start" (index 0) plus the most recent N rounds
+    const result = [chartData[0]]; // Always include the starting point
+    
+    // Get the most recent rounds up to the specified number, but not exceeding current round
+    const endRound = Math.min(round, chartData.length - 1);
+    const startRound = Math.max(1, endRound - roundsToShow + 1);
+    
+    for (let i = startRound; i <= endRound; i++) {
+      if (chartData[i]) {
+        result.push(chartData[i]);
+      }
+    }
+    
+    return result;
+  }, [chartData, activeRange, round]);
 
   // Calculate min/max values for chart display with padding
   const dataMin = Math.min(...filteredData.map(d => d.value));
@@ -180,6 +117,17 @@ const NetWorthChart = () => {
         </div>
       </CardHeader>
       <CardContent className="p-6 pt-4">
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            <p className="text-[#A3B1C6] text-sm">Current</p>
+            <p className="text-white text-2xl font-bold">{formatCurrency(portfolioValue)}</p>
+          </div>
+          <div className="text-[#A3B1C6] text-sm">
+            <p>Round {round}/{totalRounds}</p>
+            <p>History: {portfolioHistory.length} values</p>
+          </div>
+        </div>
+        
         <div className="h-64 mt-4">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
@@ -263,7 +211,9 @@ const NetWorthChart = () => {
               +30% Benchmark Reached
             </Badge>
           )}
-          {Math.abs(filteredData[filteredData.length - 1]?.value - filteredData[filteredData.length - 2]?.value) / filteredData[filteredData.length - 2]?.value > 0.05 && (
+          {filteredData.length >= 2 &&
+           Math.abs(filteredData[filteredData.length - 1]?.value - filteredData[filteredData.length - 2]?.value) / 
+           filteredData[filteredData.length - 2]?.value > 0.05 && (
             <Badge className="bg-[#3A7BFF]/20 text-[#3A7BFF]">
               Recent Price Swing
             </Badge>
