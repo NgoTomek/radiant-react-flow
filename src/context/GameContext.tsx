@@ -930,30 +930,23 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [addNotification]);
   
   // Handle trading
-  const handleTrade = useCallback((asset: AssetType, action: string, quantity: any) => {
+  const handleTrade = useCallback((asset: AssetType, action: TradeAction, quantity: any): boolean => {
     console.log(`Trade requested: ${action} ${quantity} of ${asset} at price ${assetPrices[asset]}`);
-    console.log(`Portfolio before trade:`, JSON.stringify(portfolio));
-    console.log(`Asset data before trade:`, JSON.stringify(assetData));
     
     try {
       // Create deep copies to ensure we don't have reference issues
-      const updatedPortfolio = JSON.parse(JSON.stringify(portfolio));
-      const updatedAssetData = JSON.parse(JSON.stringify(assetData));
+      const updatedPortfolio = { ...portfolio };
+      const updatedAssetData = {
+        quantities: { ...assetData.quantities },
+        dollarValues: { ...assetData.dollarValues },
+        shorts: { ...assetData.shorts }
+      };
+      
       let tradeValue = 0;
       let profitLoss = 0;
+      let actualQuantity = 0;
       
-      // Ensure asset quantities and dollarValues objects exist
-      if (!updatedAssetData.quantities) {
-        updatedAssetData.quantities = {};
-      }
-      if (!updatedAssetData.dollarValues) {
-        updatedAssetData.dollarValues = {};
-      }
-      if (!updatedAssetData.shorts) {
-        updatedAssetData.shorts = {};
-      }
-      
-      // Initialize asset value if it doesn't exist
+      // Initialize asset entries if they don't exist
       if (!updatedAssetData.quantities[asset]) {
         updatedAssetData.quantities[asset] = 0;
       }
@@ -961,121 +954,80 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updatedAssetData.dollarValues[asset] = 0;
       }
       
-      // For 'buy' action, ensure we're working with a number of units
-      let actualQuantity = quantity;
-      
       if (action === 'buy') {
-        // If the quantity is a percentage (between 0 and 1), convert it to units
-        if (typeof quantity === 'number' && quantity <= 1 && quantity > 0) {
+        // Handle BUY action
+        // First, determine how many units we're buying
+        
+        // If quantity is a dollar amount
+        if (typeof quantity === 'number' && quantity > 1) {
+          // This is a dollar amount to spend
+          const maxAffordableUnits = Math.floor(updatedPortfolio.cash / assetPrices[asset]);
+          const requestedUnits = Math.floor(quantity / assetPrices[asset]);
+          actualQuantity = Math.min(maxAffordableUnits, requestedUnits);
+        } 
+        // If quantity is a percentage (0-1)
+        else if (typeof quantity === 'number' && quantity > 0 && quantity <= 1) {
           const maxAffordableUnits = Math.floor(updatedPortfolio.cash / assetPrices[asset]);
           actualQuantity = Math.floor(maxAffordableUnits * quantity);
-          console.log(`Converting percentage ${quantity} to units: ${actualQuantity}`);
         }
-        // If the quantity is already a number of units, use it directly
-        else if (typeof quantity === 'number' && quantity > 1) {
-          actualQuantity = Math.floor(quantity);
-          console.log(`Using direct units: ${actualQuantity}`);
+        // If quantity is directly specified in units
+        else if (typeof quantity === 'object' && quantity.units) {
+          actualQuantity = Math.floor(quantity.units);
         }
-        // If it's a dollar amount (string or number larger than cash)
-        else if (typeof quantity === 'string' || (typeof quantity === 'number' && quantity > updatedPortfolio.cash)) {
-          const dollarAmount = typeof quantity === 'string' ? parseFloat(quantity) : quantity;
-          if (!isNaN(dollarAmount) && dollarAmount > 0) {
-            actualQuantity = Math.floor(dollarAmount / assetPrices[asset]);
-            console.log(`Converting dollar amount ${dollarAmount} to units: ${actualQuantity}`);
-          } else {
-            // Default to 1 unit if invalid input
-            actualQuantity = 1;
-            console.log(`Invalid input, defaulting to 1 unit`);
-          }
+        // Default case - handle as units
+        else {
+          actualQuantity = Math.floor(Number(quantity));
         }
         
-        // Ensure we have at least 1 unit unless we can't afford any
-        const maxPossible = Math.floor(updatedPortfolio.cash / assetPrices[asset]);
-        if (maxPossible > 0) {
-          actualQuantity = Math.max(1, Math.min(actualQuantity, maxPossible));
-        } else {
-          actualQuantity = 0;
+        // Validate we can buy at least some quantity
+        if (isNaN(actualQuantity) || actualQuantity <= 0) {
+          console.log('Invalid quantity to buy:', actualQuantity);
+          addNotification('Invalid quantity to buy', 'error');
+          return false;
         }
         
-        console.log(`Final quantity to buy: ${actualQuantity} (max affordable: ${maxPossible})`);
-        
-        // Calculate cost based on actual quantity of units
+        // Calculate cost
         tradeValue = actualQuantity * assetPrices[asset];
-        console.log(`Total cost for purchase: ${tradeValue}`);
         
-        // Check if enough cash
+        // Validate enough cash
         if (tradeValue > updatedPortfolio.cash) {
           console.log(`Cannot afford purchase. Cash: ${updatedPortfolio.cash}, Cost: ${tradeValue}`);
           addNotification('Not enough cash for this purchase!', 'error');
           return false;
         }
         
-        if (actualQuantity <= 0) {
-          console.log('Cannot buy zero or negative quantity');
-          addNotification('Cannot complete purchase', 'error');
-          return false;
-        }
-        
-        console.log(`About to update portfolio. Old cash: ${updatedPortfolio.cash}`);
-        
-        // Update portfolio - deduct cash first
+        // Update portfolio
         updatedPortfolio.cash = Math.round((updatedPortfolio.cash - tradeValue) * 100) / 100;
-        console.log(`Cash after purchase: ${updatedPortfolio.cash}`);
-        
-        // Update asset quantities
         updatedAssetData.quantities[asset] += actualQuantity;
-        console.log(`New quantity of ${asset}: ${updatedAssetData.quantities[asset]}`);
-        
-        // Update dollar cost average
         updatedAssetData.dollarValues[asset] += tradeValue;
         
-        // Commit changes
-        setPortfolio(updatedPortfolio);
-        setAssetData(updatedAssetData);
-        
-        console.log(`Portfolio after update:`, updatedPortfolio);
-        console.log(`AssetData after update:`, updatedAssetData);
-        
-        // Update game stats
-        setGameStats(prev => ({
-          ...prev,
-          tradesExecuted: prev.tradesExecuted + 1
-        }));
-        
+        // Add notification
         addNotification(`Bought ${actualQuantity} ${asset} for ${formatCurrency(tradeValue)}`, 'success');
-        return true;
-      }
-      // Rest of the trade types...
+      } 
       else if (action === 'sell') {
-        // Check if enough assets
+        // Handle SELL action
         const currentQuantity = updatedAssetData.quantities[asset] || 0;
         
-        // Convert percentage to actual quantity
-        if (typeof quantity === 'number' && quantity <= 1 && quantity > 0) {
+        // Determine how many units to sell
+        if (typeof quantity === 'number' && quantity > 0 && quantity <= 1) {
+          // Percentage of holdings
           actualQuantity = Math.floor(currentQuantity * quantity);
-        } else if (typeof quantity === 'number') {
-          actualQuantity = Math.floor(quantity);
-        } else if (typeof quantity === 'string') {
-          const parsedQuantity = parseFloat(quantity);
-          if (!isNaN(parsedQuantity)) {
-            actualQuantity = Math.floor(parsedQuantity);
-          } else {
-            actualQuantity = 1;
-          }
+        } else {
+          // Direct quantity
+          actualQuantity = Math.floor(Number(quantity));
         }
         
-        actualQuantity = Math.min(actualQuantity, currentQuantity);
-        
-        if (actualQuantity <= 0 || currentQuantity <= 0) {
+        // Validate we have enough to sell
+        if (actualQuantity <= 0 || actualQuantity > currentQuantity) {
           console.log(`Cannot sell - current quantity: ${currentQuantity}, requested: ${actualQuantity}`);
           addNotification(`Not enough ${asset} to sell!`, 'error');
           return false;
         }
         
-        // Calculate return
+        // Calculate return and profit/loss
         tradeValue = Math.round((actualQuantity * assetPrices[asset]) * 100) / 100;
         
-        // Calculate profit/loss
+        // Calculate profit/loss based on average cost
         const avgCost = (updatedAssetData.dollarValues[asset] || 0) / currentQuantity;
         const costBasis = avgCost * actualQuantity;
         profitLoss = tradeValue - costBasis;
@@ -1092,27 +1044,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           updatedAssetData.dollarValues[asset] = remainingValue;
         }
         
-        // Commit changes
-        setPortfolio(updatedPortfolio);
-        setAssetData(updatedAssetData);
-        
-        // Update game stats
-        setGameStats(prev => {
-          const newStats = { ...prev };
-          newStats.tradesExecuted += 1;
-          if (profitLoss > 0) {
-            newStats.profitableTrades += 1;
-            if (profitLoss > newStats.biggestGain) {
-              newStats.biggestGain = profitLoss;
-            }
-          } else if (profitLoss < 0) {
-            if (Math.abs(profitLoss) > Math.abs(newStats.biggestLoss)) {
-              newStats.biggestLoss = profitLoss;
-            }
-          }
-          return newStats;
-        });
-        
+        // Add notification with profit/loss
         const profitText = profitLoss >= 0 
           ? `Profit: ${formatCurrency(profitLoss)}` 
           : `Loss: ${formatCurrency(Math.abs(profitLoss))}`;
@@ -1127,15 +1059,137 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setAchievements(updatedAchievements);
           addNotification('Achievement Unlocked: First Profit', 'achievement');
         }
-        
-        return true;
       }
-      // Rest of the code for other actions...
+      else if (action === 'short') {
+        // Handle SHORT action
+        // Check if there's already an active short position
+        if (updatedAssetData.shorts[asset]?.active) {
+          addNotification(`You already have an active short position on ${asset}`, 'error');
+          return false;
+        }
+        
+        // Determine short amount
+        let shortAmount = 0;
+        if (typeof quantity === 'number') {
+          shortAmount = quantity;
+        } else {
+          shortAmount = parseFloat(quantity);
+        }
+        
+        // Validation
+        if (isNaN(shortAmount) || shortAmount <= 0) {
+          addNotification('Invalid short amount', 'error');
+          return false;
+        }
+        
+        // Check if user has enough cash for margin (50% of position)
+        const marginRequired = shortAmount * 0.5;
+        if (marginRequired > updatedPortfolio.cash) {
+          addNotification('Not enough cash for margin requirement', 'error');
+          return false;
+        }
+        
+        // Create short position
+        updatedAssetData.shorts[asset] = {
+          value: shortAmount,
+          price: assetPrices[asset],
+          active: true
+        };
+        
+        // Reserve margin
+        updatedPortfolio.cash -= marginRequired;
+        
+        addNotification(`Opened ${formatCurrency(shortAmount)} short position on ${asset}`, 'info');
+      }
+      else if (action === 'cover') {
+        // Handle COVER action
+        // Ensure there's an active short position
+        if (!updatedAssetData.shorts[asset]?.active) {
+          addNotification(`No active short position on ${asset} to cover`, 'error');
+          return false;
+        }
+        
+        const shortPosition = updatedAssetData.shorts[asset];
+        let coverPercentage = 1; // Default to covering entire position
+        
+        // If partial coverage is specified (0-1)
+        if (typeof quantity === 'number' && quantity > 0 && quantity < 1) {
+          coverPercentage = quantity;
+        }
+        
+        // Calculate P/L
+        const entryPrice = shortPosition.price;
+        const currentPrice = assetPrices[asset];
+        const positionValue = shortPosition.value * coverPercentage;
+        
+        // Shorts profit when price goes down
+        profitLoss = positionValue * ((entryPrice - currentPrice) / entryPrice);
+        
+        // Return margin plus profit/loss
+        const marginToReturn = positionValue * 0.5;
+        updatedPortfolio.cash += marginToReturn + profitLoss;
+        
+        // Update or close position
+        if (coverPercentage >= 0.999) { // Full coverage
+          updatedAssetData.shorts[asset] = {
+            value: 0,
+            price: 0,
+            active: false
+          };
+        } else { // Partial coverage
+          updatedAssetData.shorts[asset] = {
+            value: shortPosition.value * (1 - coverPercentage),
+            price: shortPosition.price,
+            active: true
+          };
+        }
+        
+        // Notification
+        const resultText = profitLoss >= 0 
+          ? `Profit: ${formatCurrency(profitLoss)}` 
+          : `Loss: ${formatCurrency(Math.abs(profitLoss))}`;
+        
+        addNotification(`Covered short position on ${asset}. ${resultText}`, 
+          profitLoss >= 0 ? 'success' : 'warning');
+        
+        // Short master achievement
+        if (profitLoss > 0 && !achievements.shortMaster.unlocked) {
+          const updatedAchievements = { ...achievements };
+          updatedAchievements.shortMaster.unlocked = true;
+          setAchievements(updatedAchievements);
+          addNotification('Achievement Unlocked: Short Master', 'achievement');
+        }
+      }
       
-      return false;
+      // Commit all changes
+      setPortfolio(updatedPortfolio);
+      setAssetData(updatedAssetData);
+      
+      // Update game stats
+      setGameStats(prev => {
+        const newStats = { ...prev };
+        newStats.tradesExecuted += 1;
+        
+        if (action === 'sell' || action === 'cover') {
+          if (profitLoss > 0) {
+            newStats.profitableTrades += 1;
+            if (profitLoss > newStats.biggestGain) {
+              newStats.biggestGain = profitLoss;
+            }
+          } else if (profitLoss < 0) {
+            if (Math.abs(profitLoss) > Math.abs(newStats.biggestLoss)) {
+              newStats.biggestLoss = profitLoss;
+            }
+          }
+        }
+        
+        return newStats;
+      });
+      
+      return true;
     } catch (error) {
       console.error("Error in handleTrade:", error);
-      addNotification("An error occurred processing the trade", "error");
+      addNotification("Trade failed: " + (error instanceof Error ? error.message : "Unknown error"), "error");
       return false;
     }
   }, [portfolio, assetData, assetPrices, formatCurrency, addNotification, achievements]);
