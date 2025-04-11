@@ -1,5 +1,4 @@
 // src/utils/marketLogic.ts
-// DO NOT IMPORT FROM GAMECONTEXT OR ANY FILE THAT IMPORTS GAMECONTEXT
 
 // Define types locally to avoid circular dependencies
 type AssetType = 'stocks' | 'oil' | 'gold' | 'crypto';
@@ -27,108 +26,175 @@ interface NewsEvent {
   isCrash?: boolean;
 }
 
-// Initial asset prices - defined here to avoid imports
+// Initial asset prices - realistic values
 const INITIAL_ASSET_PRICES: AssetPrices = {
-  stocks: 240,
-  oil: 65,
-  gold: 1850,
-  crypto: 29200
+  stocks: 240,   // Represents an index like S&P 500 at a scaled value
+  oil: 65,       // Per barrel in USD
+  gold: 1850,    // Per ounce in USD
+  crypto: 29200  // Bitcoin in USD
 };
 
-// Asset volatility configuration
+// Asset volatility configuration - based on real-world historical volatility
 const ASSET_VOLATILITY = {
-  stocks: 0.15,  // Moderate volatility
-  oil: 0.18,     // High volatility
-  gold: 0.12,    // Low volatility (more stable)
-  crypto: 0.25   // Very high volatility
+  stocks: 0.015,  // Standard deviation per day ~1.5%
+  oil: 0.025,     // Higher volatility ~2.5%
+  gold: 0.01,     // Lower volatility ~1%
+  crypto: 0.035   // Very high volatility ~3.5%
 };
 
-// Difficulty settings
+// Base correlations between assets (simplified)
+const ASSET_CORRELATIONS = {
+  stocks: { stocks: 1.0, oil: 0.4, gold: -0.2, crypto: 0.3 },
+  oil: { stocks: 0.4, oil: 1.0, gold: 0.1, crypto: 0.2 },
+  gold: { stocks: -0.2, oil: 0.1, gold: 1.0, crypto: -0.1 },
+  crypto: { stocks: 0.3, oil: 0.2, gold: -0.1, crypto: 1.0 }
+};
+
+// Difficulty settings with more realistic parameters
 const DIFFICULTY_SETTINGS = {
   easy: {
     volatilityMultiplier: 0.7,
     startingCash: 12000,
     newsFrequency: 0.7,
-    crashChance: 0.05,
+    crashChance: 0.03,
     roundTime: 75 // seconds
   },
   normal: {
     volatilityMultiplier: 1.0,
     startingCash: 10000,
     newsFrequency: 1.0,
-    crashChance: 0.1,
+    crashChance: 0.05,
     roundTime: 60 // seconds
   },
   hard: {
-    volatilityMultiplier: 1.5,
+    volatilityMultiplier: 1.3,
     startingCash: 8000,
     newsFrequency: 1.3,
-    crashChance: 0.15,
+    crashChance: 0.08,
     roundTime: 45 // seconds
   }
 };
 
-// Sample news events
+// Sample news events with realistic impacts
 const NEWS_EVENTS: NewsEvent[] = [
   {
-    title: "TECH RALLY",
-    message: "Technology sector shows strong growth after positive earnings reports.",
-    impact: { stocks: 1.08, oil: 1.01, gold: 0.98, crypto: 1.03 },
-    tip: "Consider investing in tech stocks to capitalize on the momentum."
+    title: "FED RATE CUT",
+    message: "Federal Reserve unexpectedly cuts interest rates by 25 basis points.",
+    impact: { stocks: 1.02, oil: 1.01, gold: 1.03, crypto: 1.04 },
+    tip: "Rate cuts often benefit stocks, precious metals, and crypto due to increased liquidity."
   },
   {
-    title: "CRYPTO REGULATION",
-    message: "New regulatory framework announced for cryptocurrencies.",
-    impact: { stocks: 1.0, oil: 1.0, gold: 1.04, crypto: 0.85 },
-    tip: "Regulatory changes often create short-term volatility but long-term stability."
+    title: "TECH EARNINGS BEAT",
+    message: "Major tech companies report better than expected quarterly results.",
+    impact: { stocks: 1.03, oil: 1.005, gold: 0.995, crypto: 1.02 },
+    tip: "Positive tech earnings generally lift the entire stock market."
   },
   {
-    title: "OIL SUPPLY CRISIS",
-    message: "Global supply constraints push oil prices higher.",
-    impact: { stocks: 0.97, oil: 1.12, gold: 1.02, crypto: 0.99 },
-    tip: "Energy price increases can affect various sectors differently."
+    title: "OIL SUPPLY DISRUPTION",
+    message: "Geopolitical tensions disrupt oil supply routes in the Middle East.",
+    impact: { stocks: 0.99, oil: 1.05, gold: 1.02, crypto: 0.99 },
+    tip: "Oil supply constraints typically increase energy prices and boost safe havens like gold."
   },
   {
     title: "MARKET CRASH!",
-    message: "Major market indices plummet as investor panic spreads!",
-    impact: { stocks: 0.75, oil: 0.82, gold: 1.15, crypto: 0.70 },
-    tip: "During market crashes, defensive assets like gold often outperform.",
+    message: "Global markets plunge on liquidity concerns and economic uncertainty!",
+    impact: { stocks: 0.85, oil: 0.88, gold: 1.08, crypto: 0.80 },
+    tip: "During market crashes, diversification and holding cash can protect your portfolio.",
     isCrash: true
+  },
+  {
+    title: "INFLATION REPORT",
+    message: "Inflation data comes in higher than analyst expectations.",
+    impact: { stocks: 0.98, oil: 1.02, gold: 1.03, crypto: 0.97 },
+    tip: "Higher inflation often pressures growth stocks but benefits commodities like gold."
+  },
+  {
+    title: "CRYPTO REGULATION",
+    message: "New regulatory framework announced for cryptocurrency markets.",
+    impact: { stocks: 1.0, oil: 1.0, gold: 1.01, crypto: 0.93 },
+    tip: "Regulatory announcements typically create short-term volatility in crypto markets."
+  },
+  {
+    title: "ECONOMIC STIMULUS",
+    message: "Government announces major economic stimulus package.",
+    impact: { stocks: 1.025, oil: 1.02, gold: 1.01, crypto: 1.03 },
+    tip: "Stimulus measures often boost market sentiment across most asset classes."
+  },
+  {
+    title: "CURRENCY CRISIS",
+    message: "Emerging market currencies experience significant devaluation.",
+    impact: { stocks: 0.97, oil: 0.98, gold: 1.04, crypto: 1.06 },
+    tip: "Currency instability can drive investors to alternative stores of value."
+  },
+  {
+    title: "TECH BUBBLE BURST",
+    message: "Major tech stocks tumble as investor confidence craters.",
+    impact: { stocks: 0.90, oil: 0.97, gold: 1.04, crypto: 0.93 },
+    tip: "Tech corrections can lead to significant market rotations to value sectors.",
+    isCrash: true
+  },
+  {
+    title: "SUPPLY CHAIN CRUNCH",
+    message: "Global logistics issues worsen, affecting manufacturing output.",
+    impact: { stocks: 0.98, oil: 1.03, gold: 1.01, crypto: 0.99 },
+    tip: "Supply constraints often lead to higher input costs and potential margin pressures."
   }
 ];
 
-// Market opportunities
+// Market opportunities with realistic scenarios
 const MARKET_OPPORTUNITIES = [
   {
     type: 'double',
-    title: 'Double or Nothing!',
-    description: 'Take a chance for big gains, but beware of potential losses...',
-    actionText: 'DOUBLE OR NOTHING',
+    title: 'High-Risk Investment',
+    description: 'A high-risk, high-reward opportunity has emerged in the market.',
+    actionText: 'INVEST',
     asset: 'crypto' as AssetType,
     risk: 'high' as const
   },
   {
     type: 'insider',
-    title: 'Insider Tip',
-    description: 'You\'ve heard a reliable tip about an upcoming price movement.',
-    actionText: 'ACT ON TIP',
+    title: 'Market Analysis Signal',
+    description: 'Technical analysis suggests an imminent price movement in this asset.',
+    actionText: 'FOLLOW SIGNAL',
     asset: 'stocks' as AssetType,
     risk: 'medium' as const
+  },
+  {
+    type: 'hedge',
+    title: 'Portfolio Hedge',
+    description: 'Market uncertainty is rising - consider hedging your portfolio.',
+    actionText: 'HEDGE NOW',
+    asset: 'gold' as AssetType,
+    risk: 'low' as const
+  },
+  {
+    type: 'short',
+    title: 'Bearish Opportunity',
+    description: 'Technical indicators suggest this asset is overvalued.',
+    actionText: 'SHORT POSITION',
+    asset: 'stocks' as AssetType,
+    risk: 'high' as const
   }
 ];
 
 /**
- * Generate a random news event
+ * Generate a random news event with realistic probability
  * @param {string} difficulty - Game difficulty level
  * @param {boolean} forceCrash - Force a market crash event
- * @returns {NewsEvent} The selected news event
+ * @returns {NewsEvent | null} The selected news event or null (no news)
  */
-export const generateNewsEvent = (difficulty: string = 'normal', forceCrash: boolean = false): NewsEvent => {
-  // Get the crash chance based on difficulty
+export const generateNewsEvent = (difficulty: string = 'normal', forceCrash: boolean = false): NewsEvent | null => {
+  // Get the difficulty settings
   const difficultySettings = DIFFICULTY_SETTINGS[difficulty as keyof typeof DIFFICULTY_SETTINGS] || DIFFICULTY_SETTINGS.normal;
-  const crashChance = difficultySettings.crashChance;
   
-  // Determine if this is a crash event (or if forced)
+  // Determine if there should be news at all (reduced frequency)
+  // Most of the time there should be no news
+  if (!forceCrash && Math.random() > 0.15 * difficultySettings.newsFrequency) {
+    return null; // No news most of the time
+  }
+  
+  // Determine if this is a crash event
+  const crashChance = difficultySettings.crashChance;
   const isCrashEvent = forceCrash || Math.random() < crashChance;
   
   if (isCrashEvent) {
@@ -145,7 +211,63 @@ export const generateNewsEvent = (difficulty: string = 'normal', forceCrash: boo
 };
 
 /**
- * Update market prices based on trends, volatility, and news impact
+ * Apply mean reversion to reduce extreme price movements over time
+ * @param {number} price - Current price
+ * @param {number} initialPrice - Initial/base price
+ * @param {number} factor - Mean reversion strength (0-1)
+ * @returns {number} Mean reversion adjustment factor
+ */
+const applyMeanReversion = (price: number, initialPrice: number, factor: number = 0.05): number => {
+  // Calculate how far the price is from its initial value
+  const deviation = price / initialPrice - 1;
+  
+  // Apply a small corrective force proportional to the deviation
+  return -deviation * factor;
+};
+
+/**
+ * Generate correlated random movements for asset prices
+ * @param {AssetTrends} trends - Current market trends
+ * @returns {Object} Correlated price movements
+ */
+const generateCorrelatedMovements = (trends: AssetTrends): Record<AssetType, number> => {
+  // Base independent random movements
+  const baseMovements: Record<AssetType, number> = {
+    stocks: (Math.random() - 0.5) * 0.01,
+    oil: (Math.random() - 0.5) * 0.015,
+    gold: (Math.random() - 0.5) * 0.008,
+    crypto: (Math.random() - 0.5) * 0.02
+  };
+  
+  // Apply trend biases (subtle)
+  Object.entries(trends).forEach(([asset, trend]) => {
+    const assetKey = asset as AssetType;
+    const trendBias = trend.direction === 'up' ? 0.001 * trend.strength : -0.001 * trend.strength;
+    baseMovements[assetKey] += trendBias;
+  });
+  
+  // Apply correlations (simplified implementation)
+  const correlatedMovements: Record<AssetType, number> = { ...baseMovements };
+  
+  Object.keys(baseMovements).forEach(asset1 => {
+    const assetKey1 = asset1 as AssetType;
+    
+    // For each asset, adjust its movement based on correlations with other assets
+    Object.keys(baseMovements).forEach(asset2 => {
+      if (asset1 === asset2) return;
+      const assetKey2 = asset2 as AssetType;
+      
+      // Apply correlation effect
+      const correlation = ASSET_CORRELATIONS[assetKey1][assetKey2];
+      correlatedMovements[assetKey1] += baseMovements[assetKey2] * correlation * 0.2; // Scale down the effect
+    });
+  });
+  
+  return correlatedMovements;
+};
+
+/**
+ * Update market prices with realistic movements, correlations, and mean reversion
  * @param {AssetPrices} currentPrices - Current asset prices
  * @param {AssetTrends} currentTrends - Current market trends
  * @param {object} newsImpact - News impact modifiers
@@ -166,22 +288,44 @@ export const updateMarketPrices = (
   const updatedPrices = { ...currentPrices };
   const updatedTrends = { ...currentTrends };
   
+  // Generate correlated movements
+  const correlatedMovements = generateCorrelatedMovements(currentTrends);
+  
   // Update each asset
   Object.keys(updatedPrices).forEach(assetKey => {
     const asset = assetKey as AssetType;
-    const currentTrend = updatedTrends[asset];
+    const currentPrice = updatedPrices[asset];
     
-    // Base volatility adjusted by difficulty
-    const baseVolatility = ASSET_VOLATILITY[asset] * volatilityMultiplier;
+    // 1. Apply correlated movement
+    let changePercent = correlatedMovements[asset] * volatilityMultiplier;
     
-    // Random change between -10% and +10%
-    const changePercent = (Math.random() * 0.2) - 0.1;
+    // 2. Apply mean reversion (subtle pull back toward initial price)
+    const meanReversionFactor = applyMeanReversion(
+      currentPrice, 
+      INITIAL_ASSET_PRICES[asset],
+      0.02
+    );
+    changePercent += meanReversionFactor;
     
-    // Apply news impact if present
-    const impactMultiplier = newsImpact && newsImpact[asset] ? newsImpact[asset] - 1 : 0;
-    const totalChange = changePercent + impactMultiplier;
+    // 3. Apply news impact if present (scaled to be realistic)
+    if (newsImpact && newsImpact[asset]) {
+      // Convert multiplication factor to percentage change
+      const impactPercentage = newsImpact[asset] - 1;
+      
+      // Scale down the news impact to be more realistic
+      const scaledImpact = impactPercentage * 0.7; 
+      changePercent += scaledImpact;
+    }
     
-    // Set minimum price floors
+    // 4. Apply minimum/maximum change limits for realism
+    // Limit max change to a realistic amount per update
+    const maxChange = asset === 'crypto' ? 0.02 : 0.015;
+    changePercent = Math.max(Math.min(changePercent, maxChange), -maxChange);
+    
+    // 5. Update the price with the calculated change
+    let newPrice = currentPrice * (1 + changePercent);
+    
+    // 6. Set minimum price floors based on asset type
     let minPrice: number;
     switch(asset) {
       case 'crypto': minPrice = 1000; break;
@@ -191,13 +335,45 @@ export const updateMarketPrices = (
       default: minPrice = 1;
     }
     
-    // Update price with rounding
-    updatedPrices[asset] = Math.max(minPrice, Math.round(updatedPrices[asset] * (1 + totalChange)));
+    // Apply minimum price and round appropriately
+    newPrice = Math.max(minPrice, newPrice);
     
-    // Occasionally change trends (15% chance)
-    if (Math.random() < 0.15) {
+    // Round based on asset type
+    switch(asset) {
+      case 'stocks':
+        // Round stocks to nearest 0.05
+        newPrice = Math.round(newPrice * 20) / 20;
+        break;
+      case 'oil':
+        // Round oil to nearest 0.1
+        newPrice = Math.round(newPrice * 10) / 10;
+        break;
+      case 'gold':
+        // Round gold to nearest whole number
+        newPrice = Math.round(newPrice);
+        break;
+      case 'crypto':
+        // Round crypto to nearest 10
+        newPrice = Math.round(newPrice / 10) * 10;
+        break;
+      default:
+        newPrice = Math.round(newPrice);
+    }
+    
+    // Only update if the price actually changed
+    if (newPrice !== currentPrice) {
+      updatedPrices[asset] = newPrice;
+    }
+    
+    // 7. Occasionally update trends based on consistent price movement
+    // 5% chance of trend change per update
+    if (Math.random() < 0.05) {
+      // If price has moved consistently in one direction for several updates, 
+      // that influences the new trend direction
+      const trendBias = changePercent > 0 ? 0.7 : 0.3; // 70% chance to follow recent movement
+      
       updatedTrends[asset] = {
-        direction: Math.random() > 0.5 ? 'up' : 'down',
+        direction: Math.random() < trendBias ? 'up' : 'down',
         strength: (Math.floor(Math.random() * 3) + 1) as 1 | 2 | 3
       };
     }
@@ -207,12 +383,59 @@ export const updateMarketPrices = (
 };
 
 /**
- * Generate a market opportunity
- * @returns {object} Market opportunity
+ * Generate a market opportunity with realistic probability
+ * @returns {object | null} Market opportunity or null
  */
-export const generateMarketOpportunity = () => {
-  // Simplified version to avoid dependencies
+export const generateMarketOpportunity = (): any => {
+  // Only 5% chance to generate an opportunity
+  if (Math.random() > 0.05) {
+    return null;
+  }
+  
   return MARKET_OPPORTUNITIES[Math.floor(Math.random() * MARKET_OPPORTUNITIES.length)];
+};
+
+/**
+ * Get realistic initial cash amount based on difficulty
+ * @param {string} difficulty - Game difficulty level
+ * @returns {number} Starting cash amount
+ */
+export const getInitialCash = (difficulty: string = 'normal'): number => {
+  const difficultySettings = DIFFICULTY_SETTINGS[difficulty as keyof typeof DIFFICULTY_SETTINGS] || DIFFICULTY_SETTINGS.normal;
+  return difficultySettings.startingCash;
+};
+
+/**
+ * Calculate market stress level (0-1) based on recent volatility
+ * @param {PriceHistory} priceHistory - Historical price data
+ * @returns {number} Market stress level (0-1)
+ */
+export const calculateMarketStress = (priceHistory: any): number => {
+  // Initialize total volatility
+  let totalVolatility = 0;
+  let sampleCount = 0;
+  
+  // Calculate recent volatility across all assets
+  Object.entries(priceHistory).forEach(([asset, history]) => {
+    if (Array.isArray(history) && history.length >= 3) {
+      // Look at last 3 price points
+      const recentHistory = history.slice(-3);
+      
+      // Calculate average percentage change
+      for (let i = 1; i < recentHistory.length; i++) {
+        const percentChange = Math.abs((recentHistory[i] - recentHistory[i-1]) / recentHistory[i-1]);
+        totalVolatility += percentChange;
+        sampleCount++;
+      }
+    }
+  });
+  
+  // Calculate average volatility across all samples
+  const avgVolatility = sampleCount > 0 ? totalVolatility / sampleCount : 0;
+  
+  // Scale to a 0-1 market stress indicator
+  // Assuming 5% average change is high stress
+  return Math.min(avgVolatility * 20, 1);
 };
 
 // Export constants for use elsewhere
