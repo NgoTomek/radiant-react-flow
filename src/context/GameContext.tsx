@@ -1,8 +1,7 @@
 // src/context/GameContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { NEWS_EVENTS, MARKET_OPPORTUNITIES } from '../utils/gameData';
-import { assets as initialAssets } from '@/data/assets';
-import { NewsItem, generateRandomNews } from '@/utils/newsGenerator';
+import { NEWS_EVENTS, MARKET_OPPORTUNITIES, INITIAL_ASSET_PRICES } from '../utils/gameData';
+import { calculateMarketStress, generateMarketOpportunity, generateNewsEvent, updateMarketPrices } from '../utils/marketLogic';
 
 // Define types
 type AssetType = 'stocks' | 'oil' | 'gold' | 'crypto';
@@ -158,7 +157,7 @@ interface GameContextProps {
   // Game functions
   startGame: () => void;
   togglePause: () => void;
-  handleTrade: (asset: AssetType, action: string, quantity: any) => boolean;
+  handleTrade: (asset: AssetType, action: TradeAction, quantity: any) => boolean;
   handleOpportunity: (opportunity: MarketOpportunity) => void;
   handleEndGame: () => boolean;
   calculatePortfolioValue: () => number;
@@ -173,13 +172,8 @@ interface GameContextProps {
   achievements: Achievements;
 }
 
-// Default values
-const defaultAssetPrices: AssetPrices = {
-  stocks: 240,
-  oil: 65,
-  gold: 1850,
-  crypto: 29200
-};
+// Default asset prices
+const defaultAssetPrices: AssetPrices = INITIAL_ASSET_PRICES;
 
 const defaultContext: GameContextProps = {
   gameMode: 'standard',
@@ -187,7 +181,7 @@ const defaultContext: GameContextProps = {
   difficulty: 'normal',
   setDifficulty: () => {},
   round: 1,
-  totalRounds: 5,
+  totalRounds: 10,
   timer: 60,
   paused: false,
   
@@ -207,10 +201,10 @@ const defaultContext: GameContextProps = {
     crypto: { direction: 'up', strength: 2 }
   },
   priceHistory: {
-    stocks: [240],
-    oil: [65],
-    gold: [1850],
-    crypto: [29200]
+    stocks: [defaultAssetPrices.stocks],
+    oil: [defaultAssetPrices.oil],
+    gold: [defaultAssetPrices.gold],
+    crypto: [defaultAssetPrices.crypto]
   },
   currentNews: {
     message: "Market news will appear here...",
@@ -245,9 +239,9 @@ const defaultContext: GameContextProps = {
   
   startGame: () => {},
   togglePause: () => {},
-  handleTrade: () => {},
+  handleTrade: () => false,
   handleOpportunity: () => {},
-  handleEndGame: () => {},
+  handleEndGame: () => false,
   calculatePortfolioValue: () => 0,
   
   formatCurrency: () => '',
@@ -306,10 +300,10 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   
   const [priceHistory, setPriceHistory] = useState<PriceHistory>({
-    stocks: [240],
-    oil: [65],
-    gold: [1850],
-    crypto: [29200]
+    stocks: [defaultAssetPrices.stocks],
+    oil: [defaultAssetPrices.oil],
+    gold: [defaultAssetPrices.gold],
+    crypto: [defaultAssetPrices.crypto]
   });
   
   // Game progression
@@ -329,7 +323,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [newsHistory, setNewsHistory] = useState<NewsItem[]>([]);
   
   // News timer to control frequency
-  const [newsCountdown, setNewsCountdown] = useState(45);
+  const [newsCountdown, setNewsCountdown] = useState(120);
   
   const [showNewsPopup, setShowNewsPopup] = useState(false);
   const [newsPopup, setNewsPopup] = useState<NewsItem>({
@@ -455,115 +449,33 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return id;
   }, []);
   
-  // Update market prices - using a fixed interval of 5 seconds
-  const updateMarketPrices = useCallback((newsImpact?: any) => {
-    // Only allow news-based updates or updates every 5 seconds
-    const now = Date.now();
-    if (!newsImpact && now - lastPriceUpdateRef.current < 5000) {
-      return; // Skip if it's been less than 5 seconds since last update
-    }
+  // Update market prices using imported function
+  const updateMarketPricesEffect = useCallback(() => {
+    const result = updateMarketPrices(assetPrices, assetTrends);
     
-    lastPriceUpdateRef.current = now;
+    setAssetPrices(result.prices);
+    setAssetTrends(result.trends);
     
-    setAssetPrices(prevPrices => {
-      const updatedPrices = { ...prevPrices };
-      const updatedHistory = { ...priceHistory };
-      const updatedTrends = { ...assetTrends };
+    // Update price history
+    setPriceHistory(prev => {
+      const updatedHistory = { ...prev };
       
-      // Update each asset with gradual price movement
-      Object.keys(updatedPrices).forEach((assetKey) => {
+      Object.keys(result.prices).forEach(assetKey => {
         const asset = assetKey as AssetType;
-        const currentTrend = updatedTrends[asset];
+        const newPrice = result.prices[asset];
         
-        // Even smaller volatility for more realistic changes
-        let volatility = 0;
-        switch(asset) {
-          case 'stocks': volatility = 0.007; break; // Was 0.015
-          case 'oil': volatility = 0.009; break;    // Was 0.02
-          case 'gold': volatility = 0.005; break;   // Was 0.01
-          case 'crypto': volatility = 0.012; break; // Was 0.025
-        }
-        
-        // Adjust volatility based on trend strength (minimal multiplier)
-        volatility *= (currentTrend.strength * 0.2);
-        
-        // Generate tiny random price change
-        let change = (Math.random() * volatility) - (volatility / 2);
-        
-        // Apply minimal trend bias
-        if (currentTrend.direction === 'up') {
-          change += volatility * 0.03;
-        } else {
-          change -= volatility * 0.03;
-        }
-        
-        // Scale down news impact to be barely noticeable
-        if (newsImpact && newsImpact[asset]) {
-          const impactMagnitude = Math.abs(newsImpact[asset] - 1);
-          // Reduce impact by 95%
-          const scaledImpact = (newsImpact[asset] > 1) 
-            ? 1 + (impactMagnitude * 0.05) 
-            : 1 - (impactMagnitude * 0.05);
+        // Only update history if price changed
+        if (newPrice !== prev[asset][prev[asset].length - 1]) {
+          updatedHistory[asset] = [...(prev[asset] || []), newPrice];
           
-          change += (scaledImpact - 1);
-        }
-        
-        // Apply price change with minimum values
-        let minPrice = 10;
-        if (asset === 'crypto') minPrice = 1000;
-        if (asset === 'gold') minPrice = 500;
-        if (asset === 'oil') minPrice = 10;
-        if (asset === 'stocks') minPrice = 50;
-        
-        // Limit max change to 1% per update
-        const maxChange = 0.01;
-        change = Math.max(Math.min(change, maxChange), -maxChange);
-        
-        // Round to appropriate precision based on asset type
-        let newPrice;
-        switch(asset) {
-          case 'stocks':
-            // Round stocks to nearest 0.05
-            newPrice = Math.max(minPrice, Math.round(prevPrices[asset] * (1 + change) * 20) / 20);
-            break;
-          case 'oil':
-            // Round oil to nearest 0.1
-            newPrice = Math.max(minPrice, Math.round(prevPrices[asset] * (1 + change) * 10) / 10);
-            break;
-          case 'gold':
-            // Round gold to nearest whole number
-            newPrice = Math.max(minPrice, Math.round(prevPrices[asset] * (1 + change)));
-            break;
-          case 'crypto':
-            // Round crypto to nearest 10
-            newPrice = Math.max(minPrice, Math.round(prevPrices[asset] * (1 + change) / 10) * 10);
-            break;
-          default:
-            newPrice = Math.max(minPrice, Math.round(prevPrices[asset] * (1 + change)));
-        }
-        
-        // Only update if the price actually changed
-        if (newPrice !== prevPrices[asset]) {
-          updatedPrices[asset] = newPrice;
-          
-          // Update price history
-          if (updatedHistory[asset]) {
-            updatedHistory[asset] = [...updatedHistory[asset], newPrice];
-          } else {
-            updatedHistory[asset] = [newPrice];
+          // Keep history manageable - limit to 100 points
+          if (updatedHistory[asset].length > 100) {
+            updatedHistory[asset] = updatedHistory[asset].slice(-100);
           }
           
-          // Very rarely change trend (1% chance for natural market shifts)
-          if (Math.random() < 0.01) {
-            updatedTrends[asset] = {
-              direction: Math.random() > 0.5 ? 'up' : 'down',
-              strength: (Math.floor(Math.random() * 3) + 1) as 1 | 2 | 3
-            };
-          }
-          
-          // Only notify for very significant price changes (> 15%)
-          const priceChange = ((newPrice - (updatedHistory[asset][updatedHistory[asset].length - 2] || newPrice)) /
-            (updatedHistory[asset][updatedHistory[asset].length - 2] || newPrice)) * 100;
+          // Notify for significant price changes (>15%)
+          const prevPrice = prev[asset][prev[asset].length - 1];
+          const priceChange = ((newPrice - prevPrice) / prevPrice) * 100;
           
           if (Math.abs(priceChange) >= 15) {
             addNotification(
@@ -574,36 +486,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
       
-      // Update state
-      setPriceHistory(updatedHistory);
-      setAssetTrends(updatedTrends);
-      
-      return updatedPrices;
+      return updatedHistory;
     });
-    
-    // Even rarer market opportunity (0.5% chance, reduced from 1%)
-    if (!marketOpportunity && Math.random() < 0.005) {
-      const opportunities = MARKET_OPPORTUNITIES;
-      const randomOpportunity = opportunities[Math.floor(Math.random() * opportunities.length)];
-      setMarketOpportunity(randomOpportunity);
-      
-      // Notify about the opportunity
-      addNotification(`Special market opportunity: ${randomOpportunity.title}`, 'info');
-    }
-    
-  }, [priceHistory, assetTrends, addNotification, marketOpportunity]);
+  }, [assetPrices, assetTrends, addNotification]);
   
-  // Set up a fixed 5-second interval for price updates
+  // Set up a fixed interval for price updates
   useEffect(() => {
     // Only run when game is active and not paused
     if (!paused) {
       const priceUpdateInterval = setInterval(() => {
-        updateMarketPrices();
+        updateMarketPricesEffect();
       }, 5000); // Fixed 5-second interval
       
       return () => clearInterval(priceUpdateInterval);
     }
-  }, [updateMarketPrices, paused]);
+  }, [updateMarketPricesEffect, paused]);
   
   // Update portfolio history - now based on round changes
   useEffect(() => {
@@ -625,38 +522,15 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return updated;
       });
     }
-  }, [round, calculatePortfolioValue]);
+  }, [round, calculatePortfolioValue, portfolioHistory.length]);
   
-  // Generate news with extremely reduced frequency
-  const generateNewsEvent = useCallback((showPopup = false) => {
-    // Limit news frequency to at most once every 5 minutes (increased from 3 minutes)
-    const now = Date.now();
-    if (now - lastNewsUpdateRef.current < 300000) { // 5 minutes
-      console.log("Skipping news update, too soon");
-      return null;
-    }
+  // Generate news 
+  const generateGameNewsEvent = useCallback((showPopup = false) => {
+    // Get a new news event
+    const newsEvent = generateNewsEvent(difficulty);
     
-    lastNewsUpdateRef.current = now;
-    
-    const newsEvents = NEWS_EVENTS;
-    
-    // Reduced to 2% chance for a market crash event (was 3%)
-    const isCrash = Math.random() < 0.02;
-    
-    let newsEvent;
-    if (isCrash) {
-      const crashEvents = newsEvents.filter(event => event.isCrash);
-      newsEvent = crashEvents[Math.floor(Math.random() * crashEvents.length)] || newsEvents[0];
-      
-      // Update game stats for crash
-      setGameStats(prev => ({
-        ...prev,
-        marketCrashesWeathered: prev.marketCrashesWeathered + 1
-      }));
-    } else {
-      const regularEvents = newsEvents.filter(event => !event.isCrash);
-      newsEvent = regularEvents[Math.floor(Math.random() * regularEvents.length)] || newsEvents[0];
-    }
+    // If no news was generated, return
+    if (!newsEvent) return null;
     
     // Only update history if it's a new message
     if (currentNews.message !== newsEvent.message) {
@@ -684,11 +558,22 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tip: newsEvent.tip
     });
     
-    // Update market based on news
-    updateMarketPrices(newsEvent.impact);
+    // If news should trigger a popup, set the popup content
+    if (showPopup) {
+      setNewsPopup(newsEvent);
+      setShowNewsPopup(true);
+    }
+    
+    // If this is a crash event, update game stats
+    if (newsEvent.isCrash) {
+      setGameStats(prev => ({
+        ...prev,
+        marketCrashesWeathered: prev.marketCrashesWeathered + 1
+      }));
+    }
     
     return newsEvent;
-  }, [updateMarketPrices, currentNews]);
+  }, [currentNews, difficulty]);
   
   // Game loop timer
   const startGameTimer = useCallback(() => {
@@ -697,7 +582,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     
     // Generate initial news without popup
-    generateNewsEvent(false);
+    generateGameNewsEvent(false);
     
     // Set up timer
     gameTimerRef.current = setInterval(() => {
@@ -706,17 +591,31 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Decrement news countdown
       setNewsCountdown(prev => {
         const newCount = prev - 1;
-        // Generate news very rarely - only when countdown reaches zero
-        // and it's been at least 5 minutes since last update
+        // Generate news rarely - only when countdown reaches zero
         if (newCount <= 0) {
-          // Generate news without popup
-          generateNewsEvent(false);
+          // Generate news, sometimes with popup for important news
+          const newsEvent = generateGameNewsEvent(Math.random() < 0.3);
           
-          // Set a long countdown - between a 5-7 minutes (300-420 seconds)
-          return Math.floor(Math.random() * 120) + 300;
+          // Set countdown between 120-240 seconds (2-4 minutes)
+          return Math.floor(Math.random() * 120) + 120;
         }
         return newCount;
       });
+      
+      // Update market prices periodically
+      if (Date.now() - lastPriceUpdateRef.current >= 5000) {
+        updateMarketPricesEffect();
+        lastPriceUpdateRef.current = Date.now();
+      }
+      
+      // Occasionally check for new market opportunities
+      if (Math.random() < 0.01 && !marketOpportunity) {
+        const opportunity = generateMarketOpportunity();
+        if (opportunity) {
+          setMarketOpportunity(opportunity);
+          addNotification(`New market opportunity: ${opportunity.title}`, 'info');
+        }
+      }
       
       setTimer(prev => {
         if (prev <= 1) {
@@ -742,14 +641,13 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return updated;
             });
             
-            // Generate news for new round only if it's been at least 5 minutes
-            const now = Date.now();
-            if (now - lastNewsUpdateRef.current >= 300000) {
-              generateNewsEvent(false);
+            // Generate news for new round with higher probability
+            if (Math.random() < 0.5) {
+              const newsEvent = generateGameNewsEvent(Math.random() < 0.5);
             }
             
-            // Update market prices
-            updateMarketPrices();
+            // Always update market prices at round change
+            updateMarketPricesEffect();
             
             // Check achievements
             checkAchievements();
@@ -771,7 +669,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearInterval(gameTimerRef.current);
       }
     };
-  }, [round, totalRounds, paused, generateNewsEvent, updateMarketPrices]);
+  }, [round, totalRounds, paused, generateGameNewsEvent, updateMarketPricesEffect, calculatePortfolioValue, addNotification, handleEndGame, checkAchievements, marketOpportunity]);
   
   // Check for achievements
   const checkAchievements = useCallback(() => {
@@ -819,115 +717,6 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     setAchievements(updatedAchievements);
   }, [assetData, assetPrices, achievements, calculatePortfolioValue, addNotification]);
-  
-  // Initialize game
-  const initializeGame = useCallback(() => {
-    // Reset portfolio
-    setPortfolio({ cash: 10000 });
-    
-    // Reset asset data
-    setAssetData({
-      quantities: {},
-      dollarValues: {},
-      shorts: {}
-    });
-    
-    // Reset portfolio history - just initial value for round 0
-    setPortfolioHistory([10000]);
-    
-    // Reset time references
-    lastPriceUpdateRef.current = Date.now();
-    lastNewsUpdateRef.current = Date.now();
-    
-    // Reset asset prices
-    setAssetPrices(defaultAssetPrices);
-    
-    // Reset price history
-    setPriceHistory({
-      stocks: [defaultAssetPrices.stocks],
-      oil: [defaultAssetPrices.oil],
-      gold: [defaultAssetPrices.gold],
-      crypto: [defaultAssetPrices.crypto]
-    });
-    
-    // Reset trends
-    setAssetTrends({
-      stocks: { direction: 'up', strength: 1 },
-      oil: { direction: 'up', strength: 1 },
-      gold: { direction: 'up', strength: 1 },
-      crypto: { direction: 'up', strength: 2 }
-    });
-    
-    // Reset news and history
-    setCurrentNews({
-      message: "Welcome to Portfolio Panic! Market updates will appear here.",
-      title: "Market Open",
-      impact: {}
-    });
-    setNewsHistory([]);
-    setNewsCountdown(240); // 4 minutes initial countdown
-    
-    // Reset game progress
-    setRound(1);
-    setTimer(60); // 60 seconds per round
-    setPaused(false);
-    
-    // Reset game stats
-    setGameStats({
-      tradesExecuted: 0,
-      profitableTrades: 0,
-      biggestGain: 0,
-      biggestLoss: 0,
-      marketCrashesWeathered: 0,
-      tradesPerRound: 0
-    });
-    
-    // Clear notifications
-    setNotifications([]);
-    
-    // Reset game result
-    setGameResult({
-      finalValue: 0,
-      returnPercentage: 0,
-      bestAsset: "",
-      worstAsset: "",
-      bestReturn: 0,
-      worstReturn: 0
-    });
-    
-    // Welcome notification
-    addNotification('Game started! Make smart investment decisions.', 'info');
-    
-  }, [addNotification]);
-  
-  // Reference to notification timeouts for cleanup
-  const notificationTimeoutRef = useRef<number[]>([]);
-  
-  // Start game
-  const startGame = useCallback(() => {
-    initializeGame();
-    
-    // Small delay before starting the game timer to prevent errors
-    setTimeout(() => {
-      startGameTimer();
-    }, 100);
-    
-  }, [initializeGame, startGameTimer]);
-  
-  // Toggle pause
-  const togglePause = useCallback(() => {
-    setPaused(prev => {
-      const newPaused = !prev;
-      
-      if (newPaused) {
-        addNotification('Game paused', 'info');
-    } else {
-        addNotification('Game resumed', 'info');
-      }
-      
-      return newPaused;
-    });
-  }, [addNotification]);
   
   // Handle trading
   const handleTrade = useCallback((asset: AssetType, action: TradeAction, quantity: any): boolean => {
@@ -1169,6 +958,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setGameStats(prev => {
         const newStats = { ...prev };
         newStats.tradesExecuted += 1;
+        newStats.tradesPerRound += 1;
         
         if (action === 'sell' || action === 'cover') {
           if (profitLoss > 0) {
@@ -1193,264 +983,3 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
   }, [portfolio, assetData, assetPrices, formatCurrency, addNotification, achievements]);
-  
-  // Handle special market opportunity
-  const handleOpportunity = useCallback((opportunity: MarketOpportunity) => {
-    // Each opportunity type can have different effects
-    switch(opportunity.type) {
-      case 'double':
-        // Double or nothing - 50% chance to double investment, 50% to lose it
-        const investmentAmount = Math.min(portfolio.cash * 0.25, 1000); // Limit to 25% of cash or $1000
-        const success = Math.random() >= 0.5;
-        
-        if (success) {
-          // Double the investment
-          setPortfolio(prev => ({
-          ...prev,
-            cash: prev.cash + investmentAmount
-          }));
-          addNotification(`Double or Nothing: You won ${formatCurrency(investmentAmount)}!`, 'success');
-      } else {
-          // Lose the investment
-          setPortfolio(prev => ({
-          ...prev,
-            cash: prev.cash - investmentAmount
-          }));
-          addNotification(`Double or Nothing: You lost ${formatCurrency(investmentAmount)}`, 'error');
-        }
-        break;
-      
-      case 'insider':
-        // Insider tip - buy the asset with a guaranteed profit
-        handleTrade(opportunity.asset, 'buy', portfolio.cash * 0.3);
-        
-        // Force a price increase on this asset in the next update
-        setTimeout(() => {
-          setAssetPrices(prev => {
-            const newPrices = { ...prev };
-            newPrices[opportunity.asset] = Math.round(newPrices[opportunity.asset] * 1.2); // 20% gain
-            
-            // Update price history
-            setPriceHistory(prevHistory => ({
-              ...prevHistory,
-              [opportunity.asset]: [...(prevHistory[opportunity.asset] || []), newPrices[opportunity.asset]]
-            }));
-            
-            return newPrices;
-          });
-          
-          addNotification(`${opportunity.asset.charAt(0).toUpperCase() + opportunity.asset.slice(1)} prices surged 20%!`, 'success');
-        }, 5000);
-        break;
-      
-      case 'hedge':
-        // Automatically buy some gold as a hedge
-        handleTrade('gold', 'buy', portfolio.cash * 0.2);
-        break;
-      
-      case 'leverage':
-        // Leverage play - higher risk, higher reward
-        // Implementation depends on your game mechanics
-        addNotification('Leverage opportunity accepted', 'info');
-        break;
-      
-      case 'short':
-        // Open a short position on the specified asset
-        const shortAmount = portfolio.cash * 1.5; // Can short more than cash due to leverage
-        handleTrade(opportunity.asset, 'short', shortAmount);
-        
-        // Force a price decrease on this asset in the next update
-        setTimeout(() => {
-          setAssetPrices(prev => {
-            const newPrices = { ...prev };
-            newPrices[opportunity.asset] = Math.round(newPrices[opportunity.asset] * 0.85); // 15% drop
-            
-            // Update price history
-            setPriceHistory(prevHistory => ({
-              ...prevHistory,
-              [opportunity.asset]: [...(prevHistory[opportunity.asset] || []), newPrices[opportunity.asset]]
-            }));
-            
-            return newPrices;
-          });
-          
-          addNotification(`${opportunity.asset.charAt(0).toUpperCase() + opportunity.asset.slice(1)} prices dropped 15%!`, 'warning');
-        }, 5000);
-        break;
-      
-      default:
-        // Generic handling for other opportunity types
-        addNotification(`${opportunity.title} opportunity accepted`, 'info');
-        break;
-    }
-    
-    // Clear the opportunity
-    setMarketOpportunity(null);
-    
-    return true;
-  }, [portfolio, handleTrade, addNotification, formatCurrency]);
-  
-  // Handle end game
-  const handleEndGame = useCallback(() => {
-    // Clear all timers
-    if (gameTimerRef.current) {
-      clearInterval(gameTimerRef.current);
-      gameTimerRef.current = null;
-    }
-    
-    if (marketUpdateRef.current) {
-      clearInterval(marketUpdateRef.current);
-      marketUpdateRef.current = null;
-    }
-    
-    // Calculate final portfolio value
-    const finalValue = calculatePortfolioValue();
-    const initialCash = 10000;
-    const returnPercentage = ((finalValue - initialCash) / initialCash) * 100;
-    
-    // Calculate best and worst performing assets
-    let bestAsset = '';
-    let worstAsset = '';
-    let bestReturn = -Infinity;
-    let worstReturn = Infinity;
-    
-    Object.keys(assetPrices).forEach(asset => {
-      const assetKey = asset as AssetType;
-      const history = priceHistory[assetKey] || [];
-      
-      if (history.length >= 2) {
-        const initialPrice = history[0];
-        const finalPrice = history[history.length - 1];
-        const returnPct = ((finalPrice - initialPrice) / initialPrice) * 100;
-        
-        if (returnPct > bestReturn) {
-          bestReturn = returnPct;
-          bestAsset = asset.charAt(0).toUpperCase() + asset.slice(1);
-        }
-        
-        if (returnPct < worstReturn) {
-          worstReturn = returnPct;
-          worstAsset = asset.charAt(0).toUpperCase() + asset.slice(1);
-        }
-      }
-    });
-    
-    // Set final results
-    setGameResult({
-      finalValue,
-      returnPercentage,
-      bestAsset,
-      worstAsset,
-      bestReturn,
-      worstReturn
-    });
-    
-    // Check for crash survivor achievement if applicable
-    if (gameStats.marketCrashesWeathered > 0 && returnPercentage > 0 && !achievements.marketCrash.unlocked) {
-      const updatedAchievements = { ...achievements };
-      updatedAchievements.marketCrash.unlocked = true;
-      setAchievements(updatedAchievements);
-      addNotification('Achievement Unlocked: Crash Survivor', 'achievement');
-    }
-    
-    // Set paused state
-    setPaused(true);
-    
-    // Show end game notification
-    addNotification('Game over! Check your results.', 'info');
-    
-    return true;
-  }, [calculatePortfolioValue, priceHistory, assetPrices, gameStats, achievements, addNotification]);
-  
-  // Update settings
-  const updateSettings = useCallback((newSettings: Settings) => {
-    setSettings(newSettings);
-    
-    // Additional logic can be added here to handle specific setting changes
-    // For example, saving settings to local storage
-    if (newSettings.saveProgress) {
-      // Logic to save game progress
-    }
-  }, []);
-  
-  // Clean up timers when component unmounts
-  useEffect(() => {
-    return () => {
-      if (gameTimerRef.current) {
-        clearInterval(gameTimerRef.current);
-      }
-      
-      if (marketUpdateRef.current) {
-        clearInterval(marketUpdateRef.current);
-      }
-      
-      notificationTimeoutRef.current.forEach(id => clearTimeout(id));
-    };
-  }, []);
-  
-  // Calculate portfolio value whenever relevant state changes
-  useEffect(() => {
-    const currentValue = calculatePortfolioValue();
-    setPortfolio(prev => ({ ...prev, netWorth: currentValue }));
-  }, [assetPrices, assetData, calculatePortfolioValue]);
-  
-  // Create the context value
-  const contextValue: GameContextProps = {
-    // Game state
-    gameMode,
-    setGameMode,
-    difficulty,
-    setDifficulty,
-    round,
-    totalRounds,
-    timer,
-    paused,
-    
-    // Portfolio data
-    portfolio,
-    assetPrices,
-    assetData,
-    portfolioHistory,
-    
-    // Market data
-    assetTrends,
-    priceHistory,
-    currentNews,
-    newsHistory,
-    marketOpportunity,
-    
-    // UI state
-    notifications,
-    showNewsPopup,
-    setShowNewsPopup,
-    newsPopup,
-    showMarketAlert,
-    setShowMarketAlert,
-    marketAlert,
-    settings,
-    updateSettings,
-    
-    // Game functions
-    startGame,
-    togglePause,
-    handleTrade,
-    handleOpportunity,
-    handleEndGame,
-    calculatePortfolioValue,
-    
-    // Utility functions
-    formatCurrency,
-    formatTime,
-    
-    // Results and stats
-    gameStats,
-    gameResult,
-    achievements
-  };
-  
-  return (
-    <GameContext.Provider value={contextValue}>
-      {children}
-    </GameContext.Provider>
-  );
-};
